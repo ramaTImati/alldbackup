@@ -2,6 +2,8 @@
 
 alldbackup does not run as a service and has no internal scheduler. Cron starts the CLI at the scheduled time. The backup files are still written to `storage.local.path` (default `/var/backups/alldbackup/<job-name>/`); cron does not move or copy them.
 
+Running `alldbackup run --all` manually starts a backup immediately and exits. It does not install a cron entry. Add the command to a crontab to run it automatically.
+
 ## 1. Choose the cron account
 
 Use the same account that owns or can read:
@@ -37,6 +39,8 @@ Add this line to run all enabled jobs every day at 02:00:
 ```cron
 0 2 * * * /usr/local/bin/alldbackup run --all --config /etc/alldbackup/config.yaml
 ```
+
+Because this line is in root's crontab, do not put `sudo` in the cron command. If you edit a regular user's crontab instead, remove `sudo` there too and grant that account access to the config, secrets, database, and backup directory.
 
 For one job only, replace `--all` with `--job production`. The CLI returns a non-zero exit code if any selected job fails; later jobs still run after a failure.
 

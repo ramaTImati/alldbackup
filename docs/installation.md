@@ -81,6 +81,8 @@ sudo alldbackup run --job production
 sudo alldbackup run --all
 ```
 
+These commands start a backup immediately and exit; they do not schedule future runs. Use [cron](cron.md) to run the same command automatically.
+
 For a job named `production`, the files are written under:
 
 ```text

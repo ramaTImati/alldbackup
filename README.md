@@ -64,6 +64,8 @@ Install the database utility required by each enabled job: `mysqldump` or `maria
 
    Replace `production` with the job name in the config. A failed job does not stop later jobs in `--all`; the command returns a non-zero exit code if any job fails.
 
+   These commands run the backup immediately and then exit. They do not create a schedule. To run backups automatically, add the command to cron as shown below.
+
 ### Default file locations
 
 | Purpose | Default location | Details |
@@ -193,6 +195,8 @@ Pasang utilitas basis data yang diperlukan setiap job aktif: `mysqldump` atau `m
    ```
 
    Ganti `production` dengan nama job di konfigurasi. Jika satu job gagal saat `--all`, job berikutnya tetap dijalankan. Perintah berakhir dengan kode non-zero jika ada job yang gagal.
+
+   Perintah tersebut langsung menjalankan backup saat itu juga, lalu selesai. Perintah itu tidak membuat jadwal. Untuk menjalankan backup otomatis, masukkan perintahnya ke cron seperti contoh di bawah.
 
 #### Lokasi file default
 

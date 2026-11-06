@@ -36,7 +36,7 @@ Install the database utility required by each enabled job: `mysqldump` or `maria
 
    `init` creates an empty config with no database jobs. It does not overwrite a config that already exists.
 
-3. Add a database job and its password. `config add` is interactive and asks for a `password_env` name and an optional five-field cron schedule; leave the schedule blank for a manual-only job. It does not ask for or save the password.
+3. Add a database job and its password. `config add` is interactive and asks for a `password_env` name and a five-field cron schedule. The schedule prompt defaults to `0 0 * * *` (daily at midnight in the server's timezone) if left blank. The command does not ask for or save the password.
 
    ```bash
    sudo alldbackup config add
@@ -83,7 +83,7 @@ If you choose a custom config path, for example `sudo alldbackup --config /opt/a
 
 ## Configuration
 
-The default YAML file is `/etc/alldbackup/config.yaml`. `config add` appends a job to its `jobs:` list. Each job may set a `schedule` such as `0 2 * * *`; omit it for manual-only jobs. You can also edit the file directly; see [`configs/config.example.yaml`](configs/config.example.yaml) for complete host and Docker examples.
+The default YAML file is `/etc/alldbackup/config.yaml`. `config add` appends a job to its `jobs:` list. Set a `schedule` such as `0 2 * * *` for each job. If the field is omitted or blank, it defaults to `0 0 * * *` (daily at midnight in the server's timezone). See [`configs/config.example.yaml`](configs/config.example.yaml) for complete host and Docker examples.
 
 For SQL jobs, `password_env` must match a key in `/etc/alldbackup/secrets.env` or an environment variable. Environment variables take precedence over the secrets file. For example, if the job has `password_env: MYSQL_BACKUP_PASSWORD`, store `MYSQL_BACKUP_PASSWORD=...` in the secrets file. Do not put the password itself in YAML or a process argument.
 
@@ -170,7 +170,7 @@ Pasang utilitas basis data yang diperlukan setiap job aktif: `mysqldump` atau `m
 
    Perintah `init` membuat konfigurasi kosong tanpa job basis data. Konfigurasi yang sudah ada tidak akan ditimpa.
 
-3. Tambahkan job basis data dan password-nya. `config add` berjalan interaktif dan meminta nama `password_env` serta jadwal cron lima kolom opsional; kosongkan jadwal untuk job manual saja. Perintah ini tidak meminta atau menyimpan password.
+3. Tambahkan job basis data dan password-nya. `config add` berjalan interaktif dan meminta nama `password_env` serta jadwal cron lima kolom. Jika jadwal dikosongkan, nilainya menjadi `0 0 * * *` (setiap hari pukul 00:00 menurut zona waktu server). Perintah ini tidak meminta atau menyimpan password.
 
    ```bash
    sudo alldbackup config add
@@ -217,7 +217,7 @@ Jika memakai path konfigurasi khusus, misalnya `sudo alldbackup --config /opt/al
 
 ### Konfigurasi
 
-File YAML default adalah `/etc/alldbackup/config.yaml`. Perintah `config add` menambahkan job ke daftar `jobs:`. Setiap job dapat memiliki `schedule`, misalnya `0 2 * * *`; hilangkan untuk job manual saja. File tersebut juga dapat diedit langsung. Lihat [`configs/config.example.yaml`](configs/config.example.yaml) untuk contoh lengkap job host dan Docker.
+File YAML default adalah `/etc/alldbackup/config.yaml`. Perintah `config add` menambahkan job ke daftar `jobs:`. Atur `schedule` lima kolom untuk setiap job, misalnya `0 2 * * *`. Jika field tidak ada atau kosong, nilainya menjadi `0 0 * * *` (setiap hari pukul 00:00 menurut zona waktu server). Lihat [`configs/config.example.yaml`](configs/config.example.yaml) untuk contoh lengkap job host dan Docker.
 
 Untuk job SQL, nilai `password_env` harus sama dengan nama key di `/etc/alldbackup/secrets.env` atau environment variable. Environment variable memiliki prioritas. Contoh: jika job berisi `password_env: MYSQL_BACKUP_PASSWORD`, simpan nilai dalam `secrets.env` sebagai `MYSQL_BACKUP_PASSWORD=...`. Jangan menaruh password dalam YAML atau argumen proses.
 

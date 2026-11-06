@@ -198,7 +198,7 @@ func addJobCommand(o *options) *cobra.Command {
 				}
 			}
 		}
-		if job.Schedule, err = prompt(reader, "Schedule (5-field cron; blank for manual only)", ""); err != nil {
+		if job.Schedule, err = prompt(reader, "Schedule (5-field cron)", config.DefaultJobSchedule); err != nil {
 			return err
 		}
 		job.Enabled = true
@@ -297,10 +297,14 @@ func cronCommand(o *options) *cobra.Command {
 func cronEntries(c config.Config, binary, configPath string) []string {
 	lines := make([]string, 0, len(c.Jobs))
 	for _, job := range c.Jobs {
-		if !job.Enabled || strings.TrimSpace(job.Schedule) == "" {
+		if !job.Enabled {
 			continue
 		}
-		fields := strings.Fields(job.Schedule)
+		schedule := job.Schedule
+		if strings.TrimSpace(schedule) == "" {
+			schedule = config.DefaultJobSchedule
+		}
+		fields := strings.Fields(schedule)
 		lines = append(lines, fmt.Sprintf("%s %s run --job %s --config %s", strings.Join(fields, " "), shellQuote(binary), shellQuote(job.Name), shellQuote(configPath)))
 	}
 	return lines

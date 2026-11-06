@@ -4,7 +4,7 @@ alldbackup has no background scheduler. The optional `schedule` field on each jo
 
 ## 1. Set a schedule per job
 
-Edit the YAML file (default `/etc/alldbackup/config.yaml`) or run `sudo alldbackup config add`. The interactive command asks for an optional schedule; leave it blank for a manual-only job.
+Edit the YAML file (default `/etc/alldbackup/config.yaml`) or run `sudo alldbackup config add`. Every enabled job gets a schedule. If `schedule` is omitted or left blank, it defaults to `0 0 * * *` (daily at midnight in the server's timezone).
 
 ```yaml
 jobs:
@@ -24,7 +24,7 @@ jobs:
 
   - name: sqlite-host
     enabled: true
-    # no schedule: manual only
+    # omitted schedule defaults to daily at 00:00 server time
     driver: sqlite
     source: host
     # connection fields...
@@ -40,7 +40,7 @@ After setting schedules, print the entries:
 sudo /usr/local/bin/alldbackup --config /etc/alldbackup/config.yaml cron print
 ```
 
-The command prints one entry for each enabled job that has a schedule. It uses the absolute path of the running binary and the selected config file, so the output can be pasted directly into the crontab. It does not modify the crontab automatically.
+The command prints one entry for every enabled job, including jobs that use the midnight default. It uses the absolute path of the running binary and the selected config file, so the output can be pasted directly into the crontab. It does not modify the crontab automatically.
 
 Open root's crontab:
 
@@ -55,7 +55,7 @@ Paste the output from `cron print`, save, and exit. For example:
 30 2 * * * '/usr/local/bin/alldbackup' run --job 'postgres-docker' --config '/etc/alldbackup/config.yaml'
 ```
 
-Do not put `sudo` in root's crontab. If you use a non-root user's crontab, ensure that user can read the config and secrets, access the database or Docker daemon, and write the backup directory. Run `cron print` again whenever job schedules, binary path, or config path change, then replace the old entries.
+Do not put `sudo` in root's crontab. If you use a non-root user's crontab, ensure that user can read the config and secrets, access the database or Docker daemon, and write the backup directory. Run `cron print` again whenever job schedules, binary path, or config path change, then replace the existing alldbackup entries. Remove any older `run --all` entry if it would duplicate these per-job runs.
 
 ## 3. Check the setup
 

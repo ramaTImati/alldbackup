@@ -15,6 +15,7 @@ import (
 )
 
 const DefaultPath = "/etc/alldbackup/config.yaml"
+const DefaultJobSchedule = "0 0 * * *"
 
 var jobNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,62}$`)
 var envNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -100,6 +101,7 @@ func Load(path string) (Config, error) {
 	if err := dec.Decode(&c); err != nil {
 		return Config{}, fmt.Errorf("parse config %q: %w", path, err)
 	}
+	c.applyJobDefaults()
 	if c.SecretsFile != "" && !filepath.IsAbs(c.SecretsFile) {
 		c.SecretsFile = filepath.Join(filepath.Dir(path), c.SecretsFile)
 	}
@@ -156,11 +158,12 @@ func (c Config) Validate() error {
 			return fmt.Errorf("duplicate job name %q", j.Name)
 		}
 		seen[j.Name] = true
-		if strings.TrimSpace(j.Schedule) != "" {
-			parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
-			if _, err := parser.Parse(j.Schedule); err != nil {
-				return fmt.Errorf("%s.schedule must be a valid five-field cron expression: %w", prefix, err)
-			}
+		if strings.TrimSpace(j.Schedule) == "" {
+			return fmt.Errorf("%s.schedule is required (default: %s)", prefix, DefaultJobSchedule)
+		}
+		parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+		if _, err := parser.Parse(j.Schedule); err != nil {
+			return fmt.Errorf("%s.schedule must be a valid five-field cron expression: %w", prefix, err)
 		}
 		switch j.Driver {
 		case "mysql", "mariadb", "postgres":
@@ -239,6 +242,7 @@ func (c Config) FindJob(name string) (Job, bool) {
 }
 
 func Write(path string, c Config) error {
+	c.applyJobDefaults()
 	if err := c.Validate(); err != nil {
 		return err
 	}
@@ -267,6 +271,9 @@ func AddJob(path string, job Job) error {
 		return err
 	}
 	job.Enabled = true
+	if strings.TrimSpace(job.Schedule) == "" {
+		job.Schedule = DefaultJobSchedule
+	}
 	c.Jobs = append(c.Jobs, job)
 	if err := c.Validate(); err != nil {
 		return err
@@ -285,6 +292,14 @@ func AddJob(path string, job Job) error {
 		return err
 	}
 	return nil
+}
+
+func (c *Config) applyJobDefaults() {
+	for i := range c.Jobs {
+		if strings.TrimSpace(c.Jobs[i].Schedule) == "" {
+			c.Jobs[i].Schedule = DefaultJobSchedule
+		}
+	}
 }
 
 func ReadSecrets(path string, warn func(string, ...any)) (map[string]string, error) {

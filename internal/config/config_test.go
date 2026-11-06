@@ -25,6 +25,9 @@ func TestDefaultsForAndRoundTrip(t *testing.T) {
 	if loaded.Storage.Local.Path != c.Storage.Local.Path {
 		t.Fatalf("storage path = %q, want %q", loaded.Storage.Local.Path, c.Storage.Local.Path)
 	}
+	if loaded.Jobs[0].Schedule != DefaultJobSchedule {
+		t.Fatalf("missing schedule = %q, want default %q", loaded.Jobs[0].Schedule, DefaultJobSchedule)
+	}
 	if err := Write(path, c); !os.IsExist(err) {
 		t.Fatalf("second write error = %v, want already exists", err)
 	}
@@ -40,7 +43,7 @@ func TestValidateRejectsTraversalDuplicateAndMissingFields(t *testing.T) {
 	if err := c.Validate(); err == nil {
 		t.Fatal("accepted duplicate job names")
 	}
-	c.Jobs = []Job{{Name: "db", Enabled: true, Driver: "postgres", Source: "host", Database: "app", Username: "backup", PasswordEnv: "DB_PASS", Host: "localhost", Port: 5432}}
+	c.Jobs = []Job{{Name: "db", Enabled: true, Schedule: DefaultJobSchedule, Driver: "postgres", Source: "host", Database: "app", Username: "backup", PasswordEnv: "DB_PASS", Host: "localhost", Port: 5432}}
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -66,8 +69,23 @@ func TestScheduleValidation(t *testing.T) {
 	}
 
 	c.Jobs[0].Schedule = ""
-	if err := c.Validate(); err != nil {
-		t.Fatalf("empty schedule should mean manual-only: %v", err)
+	if err := c.Validate(); err == nil {
+		t.Fatal("accepted empty schedule before defaults are applied")
+	}
+}
+
+func TestLoadDefaultsMissingJobScheduleToMidnight(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	data := []byte("version: 1\njobs:\n  - name: sqlite\n    enabled: true\n    driver: sqlite\n    source: host\n    file: /tmp/db.sqlite\n")
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Jobs[0].Schedule; got != DefaultJobSchedule {
+		t.Fatalf("missing schedule = %q, want %q", got, DefaultJobSchedule)
 	}
 }
 

@@ -81,6 +81,12 @@ Inside each ZIP are `backup.sql` (MySQL, MariaDB, or PostgreSQL), or `database.s
 
 If you choose a custom config path, for example `sudo alldbackup --config /opt/alldbackup/config.yaml init`, init places `secrets.env`, `rclone.conf`, and the default `backups/` directory beside that config. Pass the same `--config` path to every later command and to cron. You can change those paths in the YAML.
 
+## Upgrade or uninstall
+
+Upgrade by running the [installer](scripts/install.sh) again; it verifies and replaces the binary without changing config or backup files. See [installation and first backup](docs/installation.md#upgrade) for commands and version-pinned upgrades.
+
+To uninstall, remove alldbackup entries from the relevant crontab, then run `sudo rm -f /usr/local/bin/alldbackup`. This keeps config, credentials, local backups, and Google Drive files. See the [uninstall instructions](docs/installation.md#uninstall) before erasing local config or backup data.
+
 ## Configuration
 
 The default YAML file is `/etc/alldbackup/config.yaml`. `config add` appends a job to its `jobs:` list. Set a `schedule` such as `0 2 * * *` for each job. If omitted or blank, it defaults to `0 0 * * *` (daily at server midnight). Set `google_drive_path` to the job's folder under `storage.google_drive.remote`; if omitted, it defaults to the job name. See [`configs/config.example.yaml`](configs/config.example.yaml) for complete host and Docker examples.
@@ -214,6 +220,12 @@ Pasang utilitas basis data yang diperlukan setiap job aktif: `mysqldump` atau `m
 Di dalam ZIP terdapat `backup.sql` (MySQL, MariaDB, PostgreSQL) atau `database.sqlite`, serta `metadata.json`. Retensi backup lokal default 7 hari, sedangkan retensi Google Drive 30 hari. Atur retensi ke `0` untuk menonaktifkan penghapusan.
 
 Jika memakai path konfigurasi khusus, misalnya `sudo alldbackup --config /opt/alldbackup/config.yaml init`, perintah `init` menaruh `secrets.env`, `rclone.conf`, dan direktori default `backups/` di samping file konfigurasi. Sertakan path `--config` yang sama pada semua perintah berikutnya dan pada cron. Path tersebut juga dapat diubah di YAML.
+
+## Upgrade atau uninstall
+
+Untuk upgrade, jalankan kembali [installer](scripts/install.sh). Installer memverifikasi checksum lalu mengganti binary tanpa mengubah konfigurasi atau file backup. Lihat [panduan upgrade](docs/installation.md#upgrade) untuk langkah lengkap dan upgrade ke versi tertentu.
+
+Untuk uninstall, hapus baris alldbackup dari crontab yang digunakan, lalu jalankan `sudo rm -f /usr/local/bin/alldbackup`. Konfigurasi, kredensial, backup lokal, dan file Google Drive tetap tersimpan. Baca [panduan uninstall](docs/installation.md#uninstall) sebelum menghapus konfigurasi atau data backup lokal.
 
 ### Konfigurasi
 

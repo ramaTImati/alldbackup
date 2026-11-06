@@ -119,3 +119,48 @@ For host jobs, install `mysqldump` or `mariadb-dump`, `pg_dump`, or `sqlite3` on
 ## Manual binary installation
 
 Download the Linux amd64 or arm64 tarball and `checksums.txt` from [GitHub Releases](https://github.com/ramaTImati/alldbackup/releases). Verify the archive checksum before extracting `alldbackup`, then install it as `/usr/local/bin/alldbackup` with mode `0755`. This manual method does not install Rclone or configure any database/Google Drive credentials.
+
+## Upgrade
+
+To upgrade an installation made with the installer, run it again. It downloads the latest release, checks its checksum, and replaces `/usr/local/bin/alldbackup`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ramaTImati/alldbackup/main/scripts/install.sh -o /tmp/alldbackup-install.sh
+sudo bash /tmp/alldbackup-install.sh
+rm /tmp/alldbackup-install.sh
+sudo alldbackup version
+```
+
+The installer leaves `/etc/alldbackup/config.yaml`, `secrets.env`, `rclone.conf`, and backup files unchanged. It installs Rclone only if `rclone` is missing from `PATH`; it does not upgrade an existing Rclone installation. For a version-pinned upgrade, use the checksum-verified manual binary installation steps above and replace `/usr/local/bin/alldbackup`.
+
+## Uninstall
+
+There is no built-in uninstall command. First remove alldbackup's cron entries so cron does not keep invoking the removed binary:
+
+```bash
+sudo crontab -e
+```
+
+Remove the generated alldbackup lines. If you installed entries in your own user's crontab, edit that too with `crontab -e`.
+
+Then remove the binary:
+
+```bash
+sudo rm -f /usr/local/bin/alldbackup
+```
+
+This leaves the configuration and data in place so you can reinstall or recover backups later:
+
+- `/etc/alldbackup/config.yaml` — jobs and storage settings;
+- `/etc/alldbackup/secrets.env` — database passwords;
+- `/etc/alldbackup/rclone.conf` — Google Drive OAuth credentials;
+- `/var/backups/alldbackup/` — local archives and checksums;
+- files in Google Drive — remote archives are not deleted by uninstalling the CLI.
+
+Rclone is installed separately and may be used by other programs, so the uninstall steps leave its binary and per-user configuration alone. If you intentionally want to erase alldbackup's default local data too, inspect the configured paths first, then remove the directories interactively:
+
+```bash
+sudo rm -ri /etc/alldbackup /var/backups/alldbackup
+```
+
+This deletes the local config, database passwords, Rclone OAuth tokens, and local backup archives. It does not delete files stored in Google Drive. If you used a custom config or backup path, remove those paths separately only after checking their contents.

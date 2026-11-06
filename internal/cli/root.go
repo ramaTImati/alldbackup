@@ -71,7 +71,39 @@ func load(o *options) (config.Config, error) {
 	if info, err := os.Stat(o.configPath); err == nil && info.Mode().Perm()&0077 != 0 {
 		o.logger.Warn("configuration file permissions are broader than 0600", "path", o.configPath, "permissions", info.Mode().Perm().String())
 	}
+	if info, err := os.Stat(c.Storage.GoogleDrive.ConfigFile); err == nil && info.Mode().Perm()&0077 != 0 {
+		o.logger.Warn("Rclone config file permissions are broader than 0600", "path", c.Storage.GoogleDrive.ConfigFile, "permissions", info.Mode().Perm().String())
+	}
 	return c, nil
+}
+
+func prepareRcloneConfig(path string) error {
+	if strings.TrimSpace(path) == "" {
+		return errors.New("Rclone config path is empty")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return fmt.Errorf("create Rclone config directory: %w", err)
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if errors.Is(err, os.ErrExist) {
+		info, statErr := os.Lstat(path)
+		if statErr != nil {
+			return fmt.Errorf("inspect Rclone config file: %w", statErr)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("Rclone config path %q must be a regular file", path)
+		}
+		if info.Mode().Perm()&0077 != 0 {
+			if err := os.Chmod(path, 0600); err != nil {
+				return fmt.Errorf("restrict Rclone config file permissions: %w", err)
+			}
+		}
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("create Rclone config file: %w", err)
+	}
+	return f.Close()
 }
 
 func initCommand(o *options) *cobra.Command {
@@ -88,6 +120,9 @@ func initCommand(o *options) *cobra.Command {
 		if err := os.MkdirAll(filepath.Dir(c.SecretsFile), 0700); err != nil {
 			return fmt.Errorf("create secrets directory: %w", err)
 		}
+		if err := prepareRcloneConfig(c.Storage.GoogleDrive.ConfigFile); err != nil {
+			return err
+		}
 		secret, err := os.OpenFile(c.SecretsFile, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 		if err == nil {
 			_, _ = secret.WriteString("# Add NAME=value entries referenced by password_env.\n")
@@ -101,7 +136,7 @@ func initCommand(o *options) *cobra.Command {
 		if err := config.Write(o.configPath, c); err != nil {
 			return fmt.Errorf("create configuration: %w", err)
 		}
-		o.logger.Info("configuration initialized", "config", o.configPath, "secrets", c.SecretsFile, "storage", c.Storage.Local.Path)
+		o.logger.Info("configuration initialized", "config", o.configPath, "secrets", c.SecretsFile, "rclone_config", c.Storage.GoogleDrive.ConfigFile, "storage", c.Storage.Local.Path)
 		return nil
 	}}
 }
@@ -354,10 +389,17 @@ func driveCommand(o *options) *cobra.Command {
 	command := &cobra.Command{Use: "drive", Short: "Set up or check Rclone storage"}
 	command.AddCommand(
 		&cobra.Command{Use: "setup", Short: "Open Rclone's interactive configuration", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
+			c, err := load(o)
+			if err != nil {
+				return err
+			}
 			if _, err := exec.LookPath("rclone"); err != nil {
 				return errors.New("rclone is not installed; install it from https://rclone.org/install/")
 			}
-			process := exec.CommandContext(cmd.Context(), "rclone", "config")
+			if err := prepareRcloneConfig(c.Storage.GoogleDrive.ConfigFile); err != nil {
+				return err
+			}
+			process := exec.CommandContext(cmd.Context(), "rclone", "config", "--config="+c.Storage.GoogleDrive.ConfigFile)
 			process.Stdin, process.Stdout, process.Stderr = os.Stdin, os.Stdout, os.Stderr
 			return process.Run()
 		}},

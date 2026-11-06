@@ -5,11 +5,11 @@ By default, a job named `production` stores its ZIP files under `/var/backups/al
 If local storage is disabled, download both the ZIP and its `.sha256` sidecar from Google Drive before verifying. Replace the timestamp below with the filename shown in the remote:
 
 ```bash
-sudo rclone copyto 'gdrive:alldbackup/production/20261106T090000.123456789+0700.zip' /tmp/production.zip
-sudo rclone copyto 'gdrive:alldbackup/production/20261106T090000.123456789+0700.zip.sha256' /tmp/production.zip.sha256
+sudo rclone --config /etc/alldbackup/rclone.conf copyto 'gdrive:alldbackup/production/20261106T090000.123456789+0700.zip' /tmp/production.zip
+sudo rclone --config /etc/alldbackup/rclone.conf copyto 'gdrive:alldbackup/production/20261106T090000.123456789+0700.zip.sha256' /tmp/production.zip.sha256
 ```
 
-Then set `BACKUP=/tmp/production.zip`. If Rclone uses a non-default config path, pass it with Rclone's `--config` option.
+Then set `BACKUP=/tmp/production.zip`. If `storage.google_drive.config_file` uses a custom path, pass that path with Rclone's `--config` option.
 
 ## 1. Find and verify a backup
 

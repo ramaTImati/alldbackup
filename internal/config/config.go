@@ -44,6 +44,7 @@ type LocalConfig struct {
 type DriveConfig struct {
 	Enabled       bool   `yaml:"enabled"`
 	Remote        string `yaml:"remote"`
+	ConfigFile    string `yaml:"config_file"`
 	RetentionDays int    `yaml:"retention_days"`
 	Timeout       string `yaml:"timeout"`
 	Retries       int    `yaml:"retries"`
@@ -71,7 +72,7 @@ func Defaults() Config {
 		SecretsFile:       "/etc/alldbackup/secrets.env",
 		Storage: StorageConfig{
 			Local:       LocalConfig{Enabled: true, Path: "/var/backups/alldbackup", RetentionDays: 7},
-			GoogleDrive: DriveConfig{Enabled: false, RetentionDays: 30, Timeout: "30m", Retries: 3},
+			GoogleDrive: DriveConfig{Enabled: false, ConfigFile: "/etc/alldbackup/rclone.conf", RetentionDays: 30, Timeout: "30m", Retries: 3},
 		},
 	}
 }
@@ -86,6 +87,7 @@ func DefaultsFor(path string) Config {
 		base := filepath.Dir(path)
 		c.SecretsFile = filepath.Join(base, "secrets.env")
 		c.Storage.Local.Path = filepath.Join(base, "backups")
+		c.Storage.GoogleDrive.ConfigFile = filepath.Join(base, "rclone.conf")
 	}
 	return c
 }
@@ -107,6 +109,9 @@ func Load(path string) (Config, error) {
 	}
 	if c.Storage.Local.Path != "" && !filepath.IsAbs(c.Storage.Local.Path) {
 		c.Storage.Local.Path = filepath.Join(filepath.Dir(path), c.Storage.Local.Path)
+	}
+	if c.Storage.GoogleDrive.ConfigFile != "" && !filepath.IsAbs(c.Storage.GoogleDrive.ConfigFile) {
+		c.Storage.GoogleDrive.ConfigFile = filepath.Join(filepath.Dir(path), c.Storage.GoogleDrive.ConfigFile)
 	}
 	if err := c.Validate(); err != nil {
 		return Config{}, err
@@ -147,6 +152,9 @@ func (c Config) Validate() error {
 	}
 	if strings.TrimSpace(c.Storage.Local.Path) == "" {
 		return errors.New("storage.local.path is required as the local backup destination or upload retry spool")
+	}
+	if strings.TrimSpace(c.Storage.GoogleDrive.ConfigFile) == "" {
+		return errors.New("storage.google_drive.config_file is required")
 	}
 	seen := make(map[string]bool, len(c.Jobs))
 	for i, j := range c.Jobs {

@@ -75,7 +75,7 @@ func TestUploadCopiesAndVerifiesArchiveAndChecksum(t *testing.T) {
 		t.Fatal(err)
 	}
 	exec := &fakeExec{}
-	drive := &Rclone{Exec: exec, Config: config.DriveConfig{Enabled: true, Remote: "gdrive:root", Timeout: "1m", Retries: 2}}
+	drive := &Rclone{Exec: exec, Config: config.DriveConfig{Enabled: true, Remote: "gdrive:root", ConfigFile: "/etc/alldbackup/rclone.conf", Timeout: "1m", Retries: 2}}
 	if err := drive.Upload(context.Background(), config.Job{Name: "db"}, path); err != nil {
 		t.Fatal(err)
 	}
@@ -87,6 +87,9 @@ func TestUploadCopiesAndVerifiesArchiveAndChecksum(t *testing.T) {
 		t.Fatalf("upload marker missing: %v", err)
 	}
 	for _, call := range exec.calls {
+		if len(call) < 3 || call[1] != "--config" || call[2] != "/etc/alldbackup/rclone.conf" {
+			t.Fatalf("rclone call did not use the configured file: %#v", call)
+		}
 		if strings.Contains(strings.Join(call, " "), "password") {
 			t.Fatalf("unexpected credential in arguments: %#v", call)
 		}

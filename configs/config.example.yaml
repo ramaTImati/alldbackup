@@ -10,6 +10,7 @@ storage:
   google_drive:
     enabled: false
     remote: gdrive:alldbackup
+    config_file: /etc/alldbackup/rclone.conf
     retention_days: 30
     timeout: 30m
     retries: 3

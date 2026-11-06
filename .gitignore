@@ -3,3 +3,5 @@
 /coverage.out
 /.test-tmp/
 *.partial
+secrets.env
+rclone.conf

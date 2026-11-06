@@ -20,18 +20,18 @@ The installer verifies the alldbackup release checksum and installs the binary a
 sudo alldbackup init
 ```
 
-This creates an empty configuration, an empty secrets file, and the local backup directory. It does not create a database job, database password, or Google Drive remote. It refuses to overwrite an existing config.
+This creates an empty configuration, an empty secrets file, an empty Rclone config file, and the local backup directory. It does not create a database job, database password, or Google Drive remote. It refuses to overwrite an existing alldbackup config.
 
 | Purpose | Default path | Created by |
 | --- | --- | --- |
 | alldbackup binary | `/usr/local/bin/alldbackup` | Installer |
 | Main YAML config | `/etc/alldbackup/config.yaml` | `alldbackup init` |
 | Secrets file | `/etc/alldbackup/secrets.env` | `alldbackup init`, mode `0600` |
+| Rclone config | `/etc/alldbackup/rclone.conf` | `alldbackup init`, mode `0600`; add a remote with `alldbackup drive setup` |
 | Local backup root | `/var/backups/alldbackup/` | `alldbackup init` |
 | Rclone binary | `/usr/bin/rclone` | Rclone's official installer, only if absent |
-| Rclone remote config | Per-user; see `rclone config file` | `rclone config` |
 
-The directories `/etc/alldbackup` and `/var/backups/alldbackup` are created with restricted permissions. Keep them owned by, or writable to, the account that runs alldbackup.
+The directories `/etc/alldbackup` and `/var/backups/alldbackup` are created with restricted permissions. The dedicated Rclone config keeps Google Drive credentials beside alldbackup's other setup files without replacing a user's existing `~/.config/rclone/rclone.conf`.
 
 ## 3. Add a database job
 
@@ -103,7 +103,7 @@ For example, to keep all alldbackup files under `/opt/alldbackup`:
 sudo alldbackup --config /opt/alldbackup/config.yaml init
 ```
 
-For a non-default config path, `init` places `secrets.env` and the default `backups/` directory beside that YAML file. It does not change the binary path. Edit the YAML if you want other storage paths, and pass the same option on every command:
+For a non-default config path, `init` places `secrets.env`, `rclone.conf`, and the default `backups/` directory beside that YAML file. It does not change the binary path. Edit the YAML if you want other storage paths, and pass the same option on every command:
 
 ```bash
 sudo alldbackup --config /opt/alldbackup/config.yaml config add

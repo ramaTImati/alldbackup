@@ -33,7 +33,7 @@ func (r *Rclone) Test(ctx context.Context) error {
 	}
 	callCtx, cancel := context.WithTimeout(ctx, mustDuration(r.Config.Timeout))
 	defer cancel()
-	if _, err := r.Exec.Output(callCtx, "rclone", []string{"lsd", r.Config.Remote}, nil); err != nil {
+	if _, err := r.Exec.Output(callCtx, "rclone", r.args("lsd", r.Config.Remote), nil); err != nil {
 		return fmt.Errorf("Google Drive remote test failed: %w", err)
 	}
 	return nil
@@ -67,7 +67,7 @@ func (r *Rclone) copy(ctx context.Context, localPath, remote string) error {
 	var last error
 	for attempt := 1; attempt <= r.Config.Retries; attempt++ {
 		callCtx, cancel := context.WithTimeout(ctx, mustDuration(r.Config.Timeout))
-		last = r.Exec.Run(callCtx, "rclone", []string{"copyto", "--retries=1", "--timeout=" + r.Config.Timeout, localPath, remote}, nil, io.Discard)
+		last = r.Exec.Run(callCtx, "rclone", r.args("copyto", "--retries=1", "--timeout="+r.Config.Timeout, localPath, remote), nil, io.Discard)
 		cancel()
 		if last == nil {
 			return nil
@@ -81,14 +81,14 @@ func (r *Rclone) copy(ctx context.Context, localPath, remote string) error {
 
 func (r *Rclone) check(ctx context.Context, localPath, remote string) error {
 	callCtx, cancel := context.WithTimeout(ctx, mustDuration(r.Config.Timeout))
-	err := r.Exec.Run(callCtx, "rclone", []string{"check", "--one-way", localPath, remote}, nil, io.Discard)
+	err := r.Exec.Run(callCtx, "rclone", r.args("check", "--one-way", localPath, remote), nil, io.Discard)
 	cancel()
 	if err == nil {
 		return nil
 	}
 	callCtx, cancel = context.WithTimeout(ctx, mustDuration(r.Config.Timeout))
 	defer cancel()
-	if cryptErr := r.Exec.Run(callCtx, "rclone", []string{"cryptcheck", localPath, remote}, nil, io.Discard); cryptErr == nil {
+	if cryptErr := r.Exec.Run(callCtx, "rclone", r.args("cryptcheck", localPath, remote), nil, io.Discard); cryptErr == nil {
 		return nil
 	} else {
 		return errors.Join(fmt.Errorf("rclone check: %w", err), fmt.Errorf("rclone cryptcheck: %w", cryptErr))
@@ -102,7 +102,7 @@ func (r *Rclone) Prune(ctx context.Context, job config.Job, now time.Time) error
 	}
 	remoteDir := strings.TrimRight(r.Config.Remote, "/") + "/" + job.Name
 	callCtx, cancel := context.WithTimeout(ctx, mustDuration(r.Config.Timeout))
-	listing, err := r.Exec.Output(callCtx, "rclone", []string{"lsf", "--files-only", "--max-depth=1", remoteDir}, nil)
+	listing, err := r.Exec.Output(callCtx, "rclone", r.args("lsf", "--files-only", "--max-depth=1", remoteDir), nil)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("list Google Drive backups for retention: %w", err)
@@ -122,7 +122,7 @@ func (r *Rclone) Prune(ctx context.Context, job config.Job, now time.Time) error
 				continue
 			}
 			callCtx, cancel := context.WithTimeout(ctx, mustDuration(r.Config.Timeout))
-			err := r.Exec.Run(callCtx, "rclone", []string{"deletefile", remoteDir + "/" + name + suffix}, nil, io.Discard)
+			err := r.Exec.Run(callCtx, "rclone", r.args("deletefile", remoteDir+"/"+name+suffix), nil, io.Discard)
 			cancel()
 			if err != nil && !errors.Is(err, os.ErrNotExist) {
 				return fmt.Errorf("delete expired remote backup %q: %w", name+suffix, err)
@@ -130,6 +130,13 @@ func (r *Rclone) Prune(ctx context.Context, job config.Job, now time.Time) error
 		}
 	}
 	return nil
+}
+
+func (r *Rclone) args(args ...string) []string {
+	if r.Config.ConfigFile == "" {
+		return args
+	}
+	return append([]string{"--config", r.Config.ConfigFile}, args...)
 }
 
 func PruneLocal(root string, job config.Job, days int, requireUploaded bool, now time.Time) error {

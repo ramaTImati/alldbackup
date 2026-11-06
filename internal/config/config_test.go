@@ -25,6 +25,9 @@ func TestDefaultsForAndRoundTrip(t *testing.T) {
 	if loaded.Storage.Local.Path != c.Storage.Local.Path {
 		t.Fatalf("storage path = %q, want %q", loaded.Storage.Local.Path, c.Storage.Local.Path)
 	}
+	if loaded.Storage.GoogleDrive.ConfigFile != filepath.Join(filepath.Dir(path), "rclone.conf") {
+		t.Fatalf("Rclone config path = %q, want config directory path", loaded.Storage.GoogleDrive.ConfigFile)
+	}
 	if loaded.Jobs[0].Schedule != DefaultJobSchedule {
 		t.Fatalf("missing schedule = %q, want default %q", loaded.Jobs[0].Schedule, DefaultJobSchedule)
 	}
@@ -86,6 +89,26 @@ func TestLoadDefaultsMissingJobScheduleToMidnight(t *testing.T) {
 	}
 	if got := c.Jobs[0].Schedule; got != DefaultJobSchedule {
 		t.Fatalf("missing schedule = %q, want %q", got, DefaultJobSchedule)
+	}
+	wantRcloneConfig := filepath.Join(filepath.Dir(path), "rclone.conf")
+	if got := c.Storage.GoogleDrive.ConfigFile; got != wantRcloneConfig {
+		t.Fatalf("default Rclone config path = %q, want %q", got, wantRcloneConfig)
+	}
+}
+
+func TestLoadResolvesRelativeRcloneConfigPath(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	data := []byte("version: 1\nstorage:\n  google_drive:\n    config_file: auth/rclone.conf\n")
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(filepath.Dir(path), "auth", "rclone.conf")
+	if c.Storage.GoogleDrive.ConfigFile != want {
+		t.Fatalf("Rclone config path = %q, want %q", c.Storage.GoogleDrive.ConfigFile, want)
 	}
 }
 

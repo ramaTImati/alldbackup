@@ -27,6 +27,7 @@ storage:
   google_drive:
     enabled: false
     remote: gdrive:alldbackup
+    config_file: /etc/alldbackup/rclone.conf
     retention_days: 30
     timeout: 30m
     retries: 3
@@ -85,8 +86,11 @@ Use one `KEY=value` entry per line. Values are read literally after the first `=
 | Config file | `/etc/alldbackup/config.yaml` | Main YAML file passed to CLI commands. |
 | `secrets_file` | `/etc/alldbackup/secrets.env` | Password values referenced by `password_env`. |
 | `storage.local.path` | `/var/backups/alldbackup` | Root for local archive folders. Each job uses a subdirectory, e.g. `/var/backups/alldbackup/production/`. |
+| `storage.google_drive.config_file` | `/etc/alldbackup/rclone.conf` | Rclone remote credentials used by alldbackup. Created by `init` with mode `0600`; never put credentials directly in YAML. |
 
 Absolute paths are used as written. Relative `secrets_file` and `storage.local.path` paths are resolved relative to the directory containing the config YAML. If you initialize `/opt/alldbackup/config.yaml`, `init` defaults those paths to `/opt/alldbackup/secrets.env` and `/opt/alldbackup/backups`.
+
+The Rclone config file path is also resolved relative to the YAML file if it is relative.
 
 Pass a custom YAML path to every command, including cron:
 

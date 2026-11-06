@@ -9,7 +9,7 @@
 - Back up MySQL, MariaDB, PostgreSQL, and SQLite on the host or in a running Docker container.
 - Create one ZIP archive per job with configurable timestamp offsets, UTC metadata, SHA-256 sidecars, and atomic publication.
 - Apply local retention and optionally upload to Google Drive with separate remote retention.
-- Support cron with per-job locking and structured `slog` output.
+- Store a separate five-field cron schedule per job and generate crontab entries with per-job locking.
 - Provide Linux amd64 and arm64 release binaries; backup servers do not need Go installed.
 
 ## Requirements
@@ -36,7 +36,7 @@ Install the database utility required by each enabled job: `mysqldump` or `maria
 
    `init` creates an empty config with no database jobs. It does not overwrite a config that already exists.
 
-3. Add a database job and its password. `config add` is interactive and asks for a `password_env` name; it does not ask for or save the password.
+3. Add a database job and its password. `config add` is interactive and asks for a `password_env` name and an optional five-field cron schedule; leave the schedule blank for a manual-only job. It does not ask for or save the password.
 
    ```bash
    sudo alldbackup config add
@@ -64,7 +64,7 @@ Install the database utility required by each enabled job: `mysqldump` or `maria
 
    Replace `production` with the job name in the config. A failed job does not stop later jobs in `--all`; the command returns a non-zero exit code if any job fails.
 
-   These commands run the backup immediately and then exit. They do not create a schedule. To run backups automatically, add the command to cron as shown below.
+   These commands run the backup immediately and then exit, regardless of each job's schedule. To run jobs automatically, add the configured schedules to cron as shown below.
 
 ### Default file locations
 
@@ -83,7 +83,7 @@ If you choose a custom config path, for example `sudo alldbackup --config /opt/a
 
 ## Configuration
 
-The default YAML file is `/etc/alldbackup/config.yaml`. `config add` appends a job to its `jobs:` list. You can also edit that file directly; see [`configs/config.example.yaml`](configs/config.example.yaml) for complete host and Docker examples.
+The default YAML file is `/etc/alldbackup/config.yaml`. `config add` appends a job to its `jobs:` list. Each job may set a `schedule` such as `0 2 * * *`; omit it for manual-only jobs. You can also edit the file directly; see [`configs/config.example.yaml`](configs/config.example.yaml) for complete host and Docker examples.
 
 For SQL jobs, `password_env` must match a key in `/etc/alldbackup/secrets.env` or an environment variable. Environment variables take precedence over the secrets file. For example, if the job has `password_env: MYSQL_BACKUP_PASSWORD`, store `MYSQL_BACKUP_PASSWORD=...` in the secrets file. Do not put the password itself in YAML or a process argument.
 
@@ -97,11 +97,13 @@ Failed uploads keep their local archive and checksum. A later `run` retries pend
 
 ## Cron
 
-To schedule backups, add the command to the crontab of the account that can read the secrets file, access the database/Docker daemon, and write the backup directory. The default config and binary paths are absolute. See the [cron guide](docs/cron.md). Example:
+To create separate cron entries from each job's `schedule`, run `sudo alldbackup cron print`, then paste the output into the crontab of the account that can read the secrets file, access the database/Docker daemon, and write the backup directory. `cron print` does not edit the crontab. See the [cron guide](docs/cron.md).
 
 ```cron
-0 2 * * * /usr/local/bin/alldbackup run --all --config /etc/alldbackup/config.yaml
+0 2 * * * '/usr/local/bin/alldbackup' run --job 'production' --config '/etc/alldbackup/config.yaml'
 ```
+
+Cron uses the server's local timezone by default. `timestamp_timezone` changes archive filename timestamps only. Manual `run --all` still runs all enabled jobs immediately.
 
 ## Verify and restore
 
@@ -141,7 +143,7 @@ MIT. See [`LICENSE`](LICENSE).
 - Mencadangkan MySQL, MariaDB, PostgreSQL, dan SQLite dari host atau container Docker yang sedang berjalan.
 - Membuat satu arsip ZIP per job dengan offset timestamp yang dapat dikonfigurasi, metadata UTC, file checksum SHA-256, dan publikasi atomik.
 - Menerapkan retensi lokal dan, secara opsional, mengunggah ke Google Drive dengan retensi remote terpisah.
-- Mendukung cron, penguncian per job, dan log terstruktur `slog`.
+- Menyimpan jadwal cron lima kolom yang berbeda untuk setiap job dan membuat baris crontab dengan penguncian per job.
 - Menyediakan binary rilis Linux amd64 dan arm64; server backup tidak perlu memasang Go.
 
 ### Persyaratan
@@ -168,7 +170,7 @@ Pasang utilitas basis data yang diperlukan setiap job aktif: `mysqldump` atau `m
 
    Perintah `init` membuat konfigurasi kosong tanpa job basis data. Konfigurasi yang sudah ada tidak akan ditimpa.
 
-3. Tambahkan job basis data dan password-nya. `config add` berjalan interaktif dan meminta nama `password_env`; perintah ini tidak meminta atau menyimpan password.
+3. Tambahkan job basis data dan password-nya. `config add` berjalan interaktif dan meminta nama `password_env` serta jadwal cron lima kolom opsional; kosongkan jadwal untuk job manual saja. Perintah ini tidak meminta atau menyimpan password.
 
    ```bash
    sudo alldbackup config add
@@ -196,7 +198,7 @@ Pasang utilitas basis data yang diperlukan setiap job aktif: `mysqldump` atau `m
 
    Ganti `production` dengan nama job di konfigurasi. Jika satu job gagal saat `--all`, job berikutnya tetap dijalankan. Perintah berakhir dengan kode non-zero jika ada job yang gagal.
 
-   Perintah tersebut langsung menjalankan backup saat itu juga, lalu selesai. Perintah itu tidak membuat jadwal. Untuk menjalankan backup otomatis, masukkan perintahnya ke cron seperti contoh di bawah.
+   Perintah tersebut langsung menjalankan backup saat itu juga tanpa melihat jadwal job, lalu selesai. Untuk menjalankan job otomatis sesuai jadwal masing-masing, masukkan baris yang dihasilkan ke cron seperti contoh di bawah.
 
 #### Lokasi file default
 
@@ -215,7 +217,7 @@ Jika memakai path konfigurasi khusus, misalnya `sudo alldbackup --config /opt/al
 
 ### Konfigurasi
 
-File YAML default adalah `/etc/alldbackup/config.yaml`. Perintah `config add` menambahkan job ke daftar `jobs:`. File tersebut juga dapat diedit langsung. Lihat [`configs/config.example.yaml`](configs/config.example.yaml) untuk contoh lengkap job host dan Docker.
+File YAML default adalah `/etc/alldbackup/config.yaml`. Perintah `config add` menambahkan job ke daftar `jobs:`. Setiap job dapat memiliki `schedule`, misalnya `0 2 * * *`; hilangkan untuk job manual saja. File tersebut juga dapat diedit langsung. Lihat [`configs/config.example.yaml`](configs/config.example.yaml) untuk contoh lengkap job host dan Docker.
 
 Untuk job SQL, nilai `password_env` harus sama dengan nama key di `/etc/alldbackup/secrets.env` atau environment variable. Environment variable memiliki prioritas. Contoh: jika job berisi `password_env: MYSQL_BACKUP_PASSWORD`, simpan nilai dalam `secrets.env` sebagai `MYSQL_BACKUP_PASSWORD=...`. Jangan menaruh password dalam YAML atau argumen proses.
 
@@ -229,11 +231,13 @@ Jika unggahan gagal, arsip dan checksum lokal tetap disimpan. Perintah `run` ber
 
 ### Cron
 
-Untuk menjadwalkan backup, tambahkan perintah ke crontab akun yang dapat membaca file secrets, mengakses basis data/Docker daemon, dan menulis ke direktori backup. Path binary dan konfigurasi default sudah absolut. Lihat [panduan cron](docs/cron.md). Contoh:
+Untuk membuat baris cron terpisah dari `schedule` setiap job, jalankan `sudo alldbackup cron print`, lalu salin hasilnya ke crontab akun yang dapat membaca file secrets, mengakses basis data/Docker daemon, dan menulis ke direktori backup. `cron print` tidak mengubah crontab secara otomatis. Lihat [panduan cron](docs/cron.md).
 
 ```cron
-0 2 * * * /usr/local/bin/alldbackup run --all --config /etc/alldbackup/config.yaml
+0 2 * * * '/usr/local/bin/alldbackup' run --job 'production' --config '/etc/alldbackup/config.yaml'
 ```
+
+Secara default cron menggunakan zona waktu lokal server. `timestamp_timezone` hanya mengubah timestamp nama file arsip. `run --all` manual tetap langsung menjalankan semua job aktif.
 
 ### Verifikasi dan pemulihan
 

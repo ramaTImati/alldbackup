@@ -1,64 +1,79 @@
-# Schedule backups with cron
+# Schedule each job with cron
 
-alldbackup does not run as a service and has no internal scheduler. Cron starts the CLI at the scheduled time. The backup files are still written to `storage.local.path` (default `/var/backups/alldbackup/<job-name>/`); cron does not move or copy them.
+alldbackup has no background scheduler. The optional `schedule` field on each job stores its five-field cron expression, and the system cron service starts alldbackup at those times. `run --all` and `run --job` still run immediately when called manually.
 
-Running `alldbackup run --all` manually starts a backup immediately and exits. It does not install a cron entry. Add the command to a crontab to run it automatically.
+## 1. Set a schedule per job
 
-## 1. Choose the cron account
+Edit the YAML file (default `/etc/alldbackup/config.yaml`) or run `sudo alldbackup config add`. The interactive command asks for an optional schedule; leave it blank for a manual-only job.
 
-Use the same account that owns or can read:
+```yaml
+jobs:
+  - name: mysql-host
+    enabled: true
+    schedule: "0 2 * * *" # daily at 02:00
+    driver: mysql
+    source: host
+    # connection fields...
 
-- `/etc/alldbackup/config.yaml` and `/etc/alldbackup/secrets.env`;
-- the Rclone config file, if Google Drive is enabled;
-- the database connection and Docker socket, if needed;
-- the local backup directory.
+  - name: postgres-docker
+    enabled: true
+    schedule: "30 2 * * *" # daily at 02:30
+    driver: postgres
+    source: docker
+    # connection fields...
 
-The commands in this guide use root, matching `sudo alldbackup ...` in the quickstart. Root's crontab reads root's Rclone config. If you use a dedicated service user instead, install the crontab for that user and make these files and permissions available to it.
+  - name: sqlite-host
+    enabled: true
+    # no schedule: manual only
+    driver: sqlite
+    source: host
+    # connection fields...
+```
 
-## 2. Test the exact commands manually
+The five fields are `minute hour day-of-month month day-of-week`. Cron uses the server's local timezone by default. If you set `CRON_TZ` in the crontab, cron uses that timezone for the schedule. The top-level `timestamp_timezone` setting only affects archive filenames; it does not change when a job runs.
 
-Run both checks as the same account cron will use:
+## 2. Generate and install the crontab entries
+
+After setting schedules, print the entries:
+
+```bash
+sudo /usr/local/bin/alldbackup --config /etc/alldbackup/config.yaml cron print
+```
+
+The command prints one entry for each enabled job that has a schedule. It uses the absolute path of the running binary and the selected config file, so the output can be pasted directly into the crontab. It does not modify the crontab automatically.
+
+Open root's crontab:
+
+```bash
+sudo crontab -e
+```
+
+Paste the output from `cron print`, save, and exit. For example:
+
+```cron
+0 2 * * * '/usr/local/bin/alldbackup' run --job 'mysql-host' --config '/etc/alldbackup/config.yaml'
+30 2 * * * '/usr/local/bin/alldbackup' run --job 'postgres-docker' --config '/etc/alldbackup/config.yaml'
+```
+
+Do not put `sudo` in root's crontab. If you use a non-root user's crontab, ensure that user can read the config and secrets, access the database or Docker daemon, and write the backup directory. Run `cron print` again whenever job schedules, binary path, or config path change, then replace the old entries.
+
+## 3. Check the setup
+
+Run both checks as the same account that owns the crontab:
 
 ```bash
 sudo /usr/local/bin/alldbackup doctor --config /etc/alldbackup/config.yaml
 sudo /usr/local/bin/alldbackup run --all --config /etc/alldbackup/config.yaml
 ```
 
-Confirm that the expected files appear under `/var/backups/alldbackup/<job-name>/`. `doctor` checks configured dependencies and connectivity; `run` creates a real backup and applies retention.
+The second command is an immediate manual run of every enabled job; it ignores the configured schedules. Successful archives and `.zip.sha256` sidecars are written under `/var/backups/alldbackup/<job-name>/` by default.
 
-## 3. Add the schedule
+## 4. Logs and troubleshooting
 
-Edit root's crontab:
-
-```bash
-sudo crontab -e
-```
-
-Add this line to run all enabled jobs every day at 02:00:
+Cron does not write a log file by default. Use cron mail or redirect output to a file writable by the cron account, for example:
 
 ```cron
-0 2 * * * /usr/local/bin/alldbackup run --all --config /etc/alldbackup/config.yaml
+0 2 * * * '/usr/local/bin/alldbackup' run --job 'mysql-host' --config '/etc/alldbackup/config.yaml' >> /var/log/alldbackup.log 2>&1
 ```
 
-Because this line is in root's crontab, do not put `sudo` in the cron command. If you edit a regular user's crontab instead, remove `sudo` there too and grant that account access to the config, secrets, database, and backup directory.
-
-For one job only, replace `--all` with `--job production`. The CLI returns a non-zero exit code if any selected job fails; later jobs still run after a failure.
-
-## 4. Where to find results and errors
-
-Successful archives are written under `/var/backups/alldbackup/<job-name>/`, with a `.zip.sha256` checksum beside each ZIP. Cron itself does not save output to a log file. Configure your system's cron mail, or redirect output to a log file that the cron account can write, for example:
-
-```cron
-0 2 * * * /usr/local/bin/alldbackup run --all --config /etc/alldbackup/config.yaml >> /var/log/alldbackup.log 2>&1
-```
-
-If using the example log path, create the file and ensure it is writable by the cron account. Rotate the log separately if you keep it long-term. `--quiet` only changes CLI log verbosity; it does not disable cron or change the exit code.
-
-For root's crontab, create the example log file as root before adding the redirected command:
-
-```bash
-sudo touch /var/log/alldbackup.log
-sudo chmod 0640 /var/log/alldbackup.log
-```
-
-If you initialized a custom config, put its exact path after `--config` here. Cron has a limited environment, so use absolute paths and do not depend on interactive shell variables for credentials; use the protected secrets file instead.
+Create the log file with permissions appropriate for the crontab account and rotate it separately. Cron has a limited environment, so use absolute paths and store database credentials in the protected secrets file rather than relying on interactive shell variables.

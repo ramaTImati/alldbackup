@@ -10,7 +10,7 @@ Use the interactive command:
 sudo alldbackup config add
 ```
 
-It asks for the job name, driver, source, database connection fields, and the name of the password environment variable. It appends the job to `/etc/alldbackup/config.yaml`; it does not save the password. Or edit the YAML directly with `sudoedit /etc/alldbackup/config.yaml`.
+It asks for the job name, driver, source, database connection fields, the name of the password environment variable, and an optional schedule. Enter a five-field cron expression such as `0 2 * * *`, or leave it blank for a manual-only job. It appends the job to `/etc/alldbackup/config.yaml`; it does not save the password. Or edit the YAML directly with `sudoedit /etc/alldbackup/config.yaml`.
 
 ### Example YAML
 
@@ -34,6 +34,7 @@ storage:
 jobs:
   - name: production
     enabled: true
+    schedule: "0 2 * * *"
     driver: mysql
     source: host
     host: 127.0.0.1
@@ -47,10 +48,16 @@ jobs:
 
 Every job has a unique lowercase `name`, `enabled`, a `driver`, and a `source`.
 
+`schedule` is optional and accepts a standard five-field cron expression in this order: minute, hour, day of month, month, day of week. For example, `0 2 * * *` means 02:00 every day. A blank or omitted value means the job runs only when started manually. Cron uses the server's local timezone (or `CRON_TZ` if configured in the crontab); `timestamp_timezone` only changes archive filename timestamps. Use `alldbackup cron print` to generate separate entries for scheduled jobs; see [the cron guide](cron.md).
+
 | Driver | Required fields | Notes |
 | --- | --- | --- |
 | `mysql`, `mariadb`, `postgres` | `database`, `username`, `password_env` | For `source: host`, also set `host` and `port`. For `source: docker`, set `container` instead. |
 | `sqlite` | `file` | For `source: host`, `file` is a path on the Linux server. For `source: docker`, it is a path inside the container; also set `container`. No password is needed. |
+
+| Job setting | Required | Meaning |
+| --- | --- | --- |
+| `schedule` | No | Five-field cron schedule for automatic execution. Omit it for manual-only jobs. |
 
 For Docker jobs, the database container must be running and contain the matching dump utility. The host must have Docker CLI and access to the Docker daemon. For host jobs, the dump utility must be installed on the server.
 

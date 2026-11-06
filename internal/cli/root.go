@@ -59,7 +59,7 @@ func Execute() error {
 	root.PersistentFlags().StringVar(&o.configPath, "config", config.DefaultPath, "configuration file")
 	root.PersistentFlags().BoolVar(&o.verbose, "verbose", false, "enable debug logging")
 	root.PersistentFlags().BoolVar(&o.quiet, "quiet", false, "show errors only")
-	root.AddCommand(initCommand(o), configCommand(o), runCommand(o), doctorCommand(o), driveCommand(o), verifyCommand(), versionCommand())
+	root.AddCommand(initCommand(o), configCommand(o), runCommand(o), cronCommand(o), doctorCommand(o), driveCommand(o), verifyCommand(), versionCommand())
 	return root.Execute()
 }
 
@@ -121,9 +121,9 @@ func configCommand(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "NAME\tENABLED\tDRIVER\tSOURCE\tDATABASE")
+			fmt.Fprintln(cmd.OutOrStdout(), "NAME\tENABLED\tSCHEDULE\tDRIVER\tSOURCE\tDATABASE")
 			for _, job := range c.Jobs {
-				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%t\t%s\t%s\t%s\n", job.Name, job.Enabled, job.Driver, job.Source, job.Database)
+				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%t\t%s\t%s\t%s\t%s\n", job.Name, job.Enabled, job.Schedule, job.Driver, job.Source, job.Database)
 			}
 			return nil
 		}},
@@ -198,6 +198,9 @@ func addJobCommand(o *options) *cobra.Command {
 				}
 			}
 		}
+		if job.Schedule, err = prompt(reader, "Schedule (5-field cron; blank for manual only)", ""); err != nil {
+			return err
+		}
 		job.Enabled = true
 		if err := config.AddJob(o.configPath, job); err != nil {
 			return err
@@ -257,6 +260,54 @@ func runCommand(o *options) *cobra.Command {
 	command.Flags().BoolVar(&all, "all", false, "run every enabled job")
 	command.Flags().StringVar(&selected, "job", "", "run one named job")
 	return command
+}
+
+func cronCommand(o *options) *cobra.Command {
+	command := &cobra.Command{Use: "cron", Short: "Generate crontab entries from job schedules"}
+	command.AddCommand(&cobra.Command{Use: "print", Short: "Print entries for enabled jobs with a schedule", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
+		c, err := load(o)
+		if err != nil {
+			return err
+		}
+		binary, err := os.Executable()
+		if err != nil {
+			return fmt.Errorf("resolve alldbackup executable: %w", err)
+		}
+		binary, err = filepath.Abs(binary)
+		if err != nil {
+			return err
+		}
+		configPath, err := filepath.Abs(o.configPath)
+		if err != nil {
+			return err
+		}
+		lines := cronEntries(c, binary, configPath)
+		if len(lines) == 0 {
+			fmt.Fprintln(cmd.OutOrStdout(), "# No enabled jobs have a schedule configured.")
+			return nil
+		}
+		for _, line := range lines {
+			fmt.Fprintln(cmd.OutOrStdout(), line)
+		}
+		return nil
+	}})
+	return command
+}
+
+func cronEntries(c config.Config, binary, configPath string) []string {
+	lines := make([]string, 0, len(c.Jobs))
+	for _, job := range c.Jobs {
+		if !job.Enabled || strings.TrimSpace(job.Schedule) == "" {
+			continue
+		}
+		fields := strings.Fields(job.Schedule)
+		lines = append(lines, fmt.Sprintf("%s %s run --job %s --config %s", strings.Join(fields, " "), shellQuote(binary), shellQuote(job.Name), shellQuote(configPath)))
+	}
+	return lines
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }
 
 func doctorCommand(o *options) *cobra.Command {

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/robfig/cron/v3"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -50,6 +51,7 @@ type DriveConfig struct {
 type Job struct {
 	Name        string `yaml:"name"`
 	Enabled     bool   `yaml:"enabled"`
+	Schedule    string `yaml:"schedule,omitempty"`
 	Driver      string `yaml:"driver"`
 	Source      string `yaml:"source"`
 	Host        string `yaml:"host,omitempty"`
@@ -154,6 +156,12 @@ func (c Config) Validate() error {
 			return fmt.Errorf("duplicate job name %q", j.Name)
 		}
 		seen[j.Name] = true
+		if strings.TrimSpace(j.Schedule) != "" {
+			parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+			if _, err := parser.Parse(j.Schedule); err != nil {
+				return fmt.Errorf("%s.schedule must be a valid five-field cron expression: %w", prefix, err)
+			}
+		}
 		switch j.Driver {
 		case "mysql", "mariadb", "postgres":
 			if strings.TrimSpace(j.Database) == "" || strings.TrimSpace(j.Username) == "" || strings.TrimSpace(j.PasswordEnv) == "" {

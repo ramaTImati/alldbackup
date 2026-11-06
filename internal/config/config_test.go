@@ -50,6 +50,27 @@ func TestValidateRejectsTraversalDuplicateAndMissingFields(t *testing.T) {
 	}
 }
 
+func TestScheduleValidation(t *testing.T) {
+	c := Defaults()
+	job := Job{Name: "db", Enabled: true, Driver: "sqlite", Source: "host", File: "/tmp/db.sqlite", Schedule: "*/15 1-5 * * 1-5"}
+	c.Jobs = []Job{job}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("valid schedule rejected: %v", err)
+	}
+
+	for _, schedule := range []string{"hourly", "60 2 * * *", "0 2 * *"} {
+		c.Jobs[0].Schedule = schedule
+		if err := c.Validate(); err == nil {
+			t.Errorf("accepted invalid schedule %q", schedule)
+		}
+	}
+
+	c.Jobs[0].Schedule = ""
+	if err := c.Validate(); err != nil {
+		t.Fatalf("empty schedule should mean manual-only: %v", err)
+	}
+}
+
 func TestTimestampTimezoneAcceptsFixedOffsetsAndRejectsInvalidValues(t *testing.T) {
 	c := Defaults()
 	c.TimestampTimezone = "+07:00"

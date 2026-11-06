@@ -1,6 +1,6 @@
 # Google Drive with Rclone
 
-Install Rclone from its [official instructions](https://rclone.org/install/). Configure a Google Drive remote:
+The alldbackup installer installs Rclone automatically if it is missing. You can also install it from the [official instructions](https://rclone.org/install/). Configure a Google Drive remote:
 
 ```bash
 alldbackup drive setup

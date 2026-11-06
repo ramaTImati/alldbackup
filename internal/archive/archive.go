@@ -15,9 +15,9 @@ import (
 	"time"
 )
 
-const TimestampLayout = "20060102T150405.000000000Z"
+const TimestampLayout = "20060102T150405.000000000Z0700"
 
-var filenamePattern = regexp.MustCompile("^[0-9]{8}T[0-9]{6}\\.[0-9]{9}Z\\.zip$")
+var filenamePattern = regexp.MustCompile(`^[0-9]{8}T[0-9]{6}\.[0-9]{9}(Z|[+-][0-9]{4})\.zip$`)
 
 type Metadata struct {
 	JobName       string        `json:"job_name"`
@@ -28,16 +28,26 @@ type Metadata struct {
 	DumpDuration  time.Duration `json:"dump_duration"`
 }
 
-func Filename(t time.Time) string { return t.UTC().Format(TimestampLayout) + ".zip" }
+func Filename(t time.Time) string { return t.Format(TimestampLayout) + ".zip" }
 
-func IsBackupName(name string) bool { return filenamePattern.MatchString(name) }
+func IsBackupName(name string) bool {
+	_, ok := BackupTime(name)
+	return ok
+}
 
 func BackupTime(name string) (time.Time, bool) {
-	if !IsBackupName(name) {
+	if !filenamePattern.MatchString(name) {
 		return time.Time{}, false
 	}
 	t, err := time.Parse(TimestampLayout+".zip", name)
-	return t, err == nil
+	if err != nil {
+		return time.Time{}, false
+	}
+	_, offset := t.Zone()
+	if offset < -14*60*60 || offset > 14*60*60 {
+		return time.Time{}, false
+	}
+	return t, true
 }
 
 // Create writes a complete archive and checksum beside each other, then publishes both atomically.
@@ -45,11 +55,12 @@ func Create(dir string, metadata Metadata, dumpName string, dump func(io.Writer)
 	if dumpName != "backup.sql" && dumpName != "database.sqlite" {
 		return "", fmt.Errorf("invalid dump entry name %q", dumpName)
 	}
+	filenameTime := metadata.TimestampUTC
 	metadata.TimestampUTC = metadata.TimestampUTC.UTC()
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return "", fmt.Errorf("create backup directory: %w", err)
 	}
-	name := Filename(metadata.TimestampUTC)
+	name := Filename(filenameTime)
 	finalPath := filepath.Join(dir, name)
 	if _, err := os.Lstat(finalPath); err == nil {
 		return "", fmt.Errorf("backup already exists: %s", finalPath)

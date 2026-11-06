@@ -178,6 +178,9 @@ func (n *Native) checkMySQL(ctx context.Context, job config.Job, secrets map[str
 			return err
 		}
 		args := []string{"--defaults-extra-file=" + hostPath, "--no-data", "--single-transaction", "--quick", "--routines", "--events", "--triggers", "--databases", job.Database}
+		if job.Driver == "mariadb" && binary == "mysqldump" {
+			args = append(args, "--column-statistics=0")
+		}
 		if job.Source == "docker" {
 			return n.withContainerFile(ctx, hostPath, job.Container, containerPath, func() error {
 				args[0] = "--defaults-extra-file=" + containerPath
@@ -224,6 +227,9 @@ func (n *Native) dumpMySQL(ctx context.Context, job config.Job, secrets map[stri
 			return err
 		}
 		args := []string{"--defaults-extra-file=" + hostPath, "--single-transaction", "--quick", "--routines", "--events", "--triggers", "--databases", job.Database}
+		if job.Driver == "mariadb" && binary == "mysqldump" {
+			args = append(args, "--column-statistics=0")
+		}
 		if job.Source == "docker" {
 			return n.withContainerFile(ctx, hostPath, job.Container, containerPath, func() error {
 				args[0] = "--defaults-extra-file=" + containerPath

@@ -70,6 +70,10 @@ func (r *Runner) runJob(ctx context.Context, job config.Job, secrets map[string]
 	defer lock.Unlock()
 
 	started := time.Now()
+	timestampLocation, err := r.Config.TimestampLocation()
+	if err != nil {
+		return err
+	}
 	r.Logger.Info("starting backup job", "job", job.Name, "driver", job.Driver, "source", job.Source)
 	if free, err := storage.FreeBytes(dir); err != nil {
 		r.Logger.Warn("could not check free disk space", "job", job.Name, "error", err)
@@ -85,7 +89,7 @@ func (r *Runner) runJob(ctx context.Context, job config.Job, secrets map[string]
 	if job.Driver == "sqlite" {
 		dumpName = "database.sqlite"
 	}
-	metadata := archive.Metadata{JobName: job.Name, Driver: job.Driver, TimestampUTC: started.UTC(), AppVersion: r.Version, FormatVersion: 1}
+	metadata := archive.Metadata{JobName: job.Name, Driver: job.Driver, TimestampUTC: started.In(timestampLocation), AppVersion: r.Version, FormatVersion: 1}
 	path, err := archive.Create(dir, metadata, dumpName, func(dst io.Writer) error {
 		return r.Dumper.Dump(ctx, job, secrets, dst)
 	})

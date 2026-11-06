@@ -55,6 +55,7 @@ func TestRunContinuesAfterJobFailure(t *testing.T) {
 	c := config.Defaults()
 	c.SecretsFile = ""
 	c.Storage.Local.Path = root
+	c.TimestampTimezone = "+07:00"
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	runner := Runner{Config: c, Dumper: fakeDumper{failName: "first"}, Logger: logger, Version: "test"}
 	jobs := []config.Job{
@@ -79,6 +80,9 @@ func TestRunContinuesAfterJobFailure(t *testing.T) {
 	}
 	if zipPath == "" {
 		t.Fatal("second job archive not found")
+	}
+	if !strings.HasSuffix(zipPath, "+0700.zip") {
+		t.Fatalf("archive filename did not use configured offset: %s", zipPath)
 	}
 	if _, err := archive.Verify(zipPath); err != nil {
 		t.Fatal(err)

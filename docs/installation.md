@@ -9,7 +9,7 @@ curl -fsSL https://raw.githubusercontent.com/ramaTImati/alldbackup/main/scripts/
 sudo bash install.sh
 ```
 
-Running it again upgrades the binary. It does not install Docker, Rclone, or database utilities and does not modify configuration.
+Running it again upgrades the binary. The installer checks for Rclone and runs Rclone's official installer if it is missing; this also happens when Google Drive is disabled. Rclone's installer needs `unzip`, `7z`, or `busybox` to extract its download. The alldbackup installer does not install Docker or database utilities and does not modify configuration or Rclone's configuration.
 
 ## Initialize
 

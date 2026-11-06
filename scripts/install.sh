@@ -17,6 +17,17 @@ esac
 
 workdir="$(mktemp -d)"
 trap 'rm -rf "$workdir"' EXIT
+
+if ! command -v rclone >/dev/null 2>&1; then
+  echo "Rclone is missing; installing it with the official installer..." >&2
+  curl --proto '=https' --tlsv1.2 -fsSL https://rclone.org/install.sh -o "${workdir}/rclone-install.sh"
+  bash "${workdir}/rclone-install.sh"
+  if ! command -v rclone >/dev/null 2>&1; then
+    echo "Rclone installer completed, but rclone is still not available on PATH" >&2
+    exit 1
+  fi
+fi
+
 archive="alldbackup_Linux_${arch}.tar.gz"
 base_url="https://github.com/${repo}/releases/latest/download"
 

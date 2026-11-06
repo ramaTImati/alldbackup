@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestDefaultsForAndRoundTrip(t *testing.T) {
@@ -49,6 +50,28 @@ func TestValidateRejectsTraversalDuplicateAndMissingFields(t *testing.T) {
 	}
 }
 
+func TestTimestampTimezoneAcceptsFixedOffsetsAndRejectsInvalidValues(t *testing.T) {
+	c := Defaults()
+	c.TimestampTimezone = "+07:00"
+	location, err := c.TimestampLocation()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := time.Date(2026, 1, 1, 0, 0, 0, 0, location).Format("Z0700"); got != "+0700" {
+		t.Fatalf("formatted offset = %q, want +0700", got)
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, value := range []string{"", "GMT+07:00", "+7:00", "+14:01", "-15:00"} {
+		c.TimestampTimezone = value
+		if err := c.Validate(); err == nil {
+			t.Errorf("accepted invalid timestamp_timezone %q", value)
+		}
+	}
+}
+
 func TestLoadRejectsUnknownYAMLField(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	if err := os.WriteFile(path, []byte("version: 1\nstorage:\n  unknown: true\n"), 0600); err != nil {
@@ -67,6 +90,9 @@ func TestExampleConfigParses(t *testing.T) {
 	}
 	if len(c.Jobs) != 4 {
 		t.Fatalf("example has %d jobs, want 4", len(c.Jobs))
+	}
+	if c.TimestampTimezone != "+07:00" {
+		t.Fatalf("example timestamp_timezone = %q, want +07:00", c.TimestampTimezone)
 	}
 }
 

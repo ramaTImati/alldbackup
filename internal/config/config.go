@@ -21,10 +21,11 @@ var containerNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
 var remotePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*:.+$`)
 
 type Config struct {
-	Version     int           `yaml:"version"`
-	SecretsFile string        `yaml:"secrets_file"`
-	Storage     StorageConfig `yaml:"storage"`
-	Jobs        []Job         `yaml:"jobs"`
+	Version           int           `yaml:"version"`
+	TimestampTimezone string        `yaml:"timestamp_timezone"`
+	SecretsFile       string        `yaml:"secrets_file"`
+	Storage           StorageConfig `yaml:"storage"`
+	Jobs              []Job         `yaml:"jobs"`
 }
 
 type StorageConfig struct {
@@ -62,8 +63,9 @@ type Job struct {
 
 func Defaults() Config {
 	return Config{
-		Version:     1,
-		SecretsFile: "/etc/alldbackup/secrets.env",
+		Version:           1,
+		TimestampTimezone: "UTC",
+		SecretsFile:       "/etc/alldbackup/secrets.env",
 		Storage: StorageConfig{
 			Local:       LocalConfig{Enabled: true, Path: "/var/backups/alldbackup", RetentionDays: 7},
 			GoogleDrive: DriveConfig{Enabled: false, RetentionDays: 30, Timeout: "30m", Retries: 3},
@@ -111,6 +113,9 @@ func Load(path string) (Config, error) {
 func (c Config) Validate() error {
 	if c.Version != 1 {
 		return fmt.Errorf("unsupported configuration version %d (expected 1)", c.Version)
+	}
+	if _, err := c.TimestampLocation(); err != nil {
+		return fmt.Errorf("timestamp_timezone: %w", err)
 	}
 	if !c.Storage.Local.Enabled && !c.Storage.GoogleDrive.Enabled {
 		return errors.New("at least one storage backend must be enabled")
@@ -186,6 +191,24 @@ func (c Config) Validate() error {
 		}
 	}
 	return nil
+}
+
+func (c Config) TimestampLocation() (*time.Location, error) {
+	if c.TimestampTimezone == "UTC" {
+		return time.UTC, nil
+	}
+	if len(c.TimestampTimezone) != 6 || (c.TimestampTimezone[0] != '+' && c.TimestampTimezone[0] != '-') || c.TimestampTimezone[3] != ':' {
+		return nil, errors.New("must be UTC or a fixed offset in ±HH:MM format")
+	}
+	parsed, err := time.Parse("-07:00", c.TimestampTimezone)
+	if err != nil {
+		return nil, errors.New("must be UTC or a fixed offset in ±HH:MM format")
+	}
+	_, offset := parsed.Zone()
+	if offset < -14*60*60 || offset > 14*60*60 {
+		return nil, errors.New("fixed offset must be between -14:00 and +14:00")
+	}
+	return time.FixedZone(c.TimestampTimezone, offset), nil
 }
 
 func (c Config) EnabledJobs() []Job {

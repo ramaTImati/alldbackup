@@ -7,7 +7,7 @@
 ## Features
 
 - Back up MySQL, MariaDB, PostgreSQL, and SQLite on the host or in a running Docker container.
-- Create one ZIP archive per job with UTC timestamps, metadata, SHA-256 sidecars, and atomic publication.
+- Create one ZIP archive per job with configurable timestamp offsets, UTC metadata, SHA-256 sidecars, and atomic publication.
 - Apply local retention and optionally upload to Google Drive with separate remote retention.
 - Support cron with per-job locking and structured `slog` output.
 - Provide Linux amd64 and arm64 release binaries; backup servers do not need Go installed.
@@ -34,7 +34,9 @@ sudo alldbackup run --all
 
 ## Configuration
 
-Jobs are defined in one YAML file. See [`configs/config.example.yaml`](configs/config.example.yaml) for host and Docker examples covering all supported database types. Passwords stay out of YAML and process arguments:
+Jobs are defined in one YAML file. See [`configs/config.example.yaml`](configs/config.example.yaml) for host and Docker examples covering all supported database types. Passwords stay out of YAML and process arguments.
+
+Set the top-level `timestamp_timezone` to `UTC` (the default) or a fixed offset such as `+07:00`. The archive filename uses that offset (for example, `...+0700.zip`), while `metadata.json` always records UTC.
 
 ```yaml
 - name: production
@@ -52,7 +54,7 @@ Add the referenced value to the secrets file as `MYSQL_BACKUP_PASSWORD=...`, or 
 
 ## Google Drive
 
-Install Rclone separately, then run `alldbackup drive setup`. On a headless server, configure the Rclone remote on a machine with a browser and transfer its protected configuration to the server. Enable the remote in YAML and run `alldbackup drive test`. See the [Google Drive guide](docs/google-drive.md).
+The installer installs Rclone from its official installer if it is missing. Then run `alldbackup drive setup`. On a headless server, configure the Rclone remote on a machine with a browser and transfer its protected configuration to the server. Enable the remote in YAML and run `alldbackup drive test`. See the [Google Drive guide](docs/google-drive.md).
 
 Failed uploads keep their local archive and checksum. A later `run` retries pending uploads before local retention can remove them. The Rclone remote can be an encrypted `crypt` remote.
 
@@ -99,7 +101,7 @@ MIT. See [`LICENSE`](LICENSE).
 ### Fitur
 
 - Mencadangkan MySQL, MariaDB, PostgreSQL, dan SQLite dari host atau container Docker yang sedang berjalan.
-- Membuat satu arsip ZIP per job dengan timestamp UTC, metadata, file checksum SHA-256, dan publikasi atomik.
+- Membuat satu arsip ZIP per job dengan offset timestamp yang dapat dikonfigurasi, metadata UTC, file checksum SHA-256, dan publikasi atomik.
 - Menerapkan retensi lokal dan, secara opsional, mengunggah ke Google Drive dengan retensi remote terpisah.
 - Mendukung cron, penguncian per job, dan log terstruktur `slog`.
 - Menyediakan binary rilis Linux amd64 dan arm64; server backup tidak perlu memasang Go.
@@ -126,7 +128,9 @@ Perintah `init` membuat `/etc/alldbackup/config.yaml`, membuat `/etc/alldbackup/
 
 ### Konfigurasi
 
-Semua job ditulis dalam satu file YAML. Lihat [`configs/config.example.yaml`](configs/config.example.yaml) untuk contoh host dan Docker bagi semua jenis basis data yang didukung. Password tidak disimpan dalam YAML atau argumen proses:
+Semua job ditulis dalam satu file YAML. Lihat [`configs/config.example.yaml`](configs/config.example.yaml) untuk contoh host dan Docker bagi semua jenis basis data yang didukung. Password tidak disimpan dalam YAML atau argumen proses.
+
+Atur `timestamp_timezone` tingkat atas ke `UTC` (default) atau offset tetap seperti `+07:00`. Nama arsip menggunakan offset tersebut (contoh `...+0700.zip`), sementara `metadata.json` tetap menyimpan waktu UTC.
 
 ```yaml
 - name: production
@@ -144,7 +148,7 @@ Tambahkan nilai yang dirujuk ke file secrets dengan format `MYSQL_BACKUP_PASSWOR
 
 ### Google Drive
 
-Pasang Rclone secara terpisah, lalu jalankan `alldbackup drive setup`. Untuk server tanpa browser, konfigurasi remote Rclone di komputer yang memiliki browser, lalu salin konfigurasi Rclone yang terlindungi ke server. Aktifkan remote di YAML dan jalankan `alldbackup drive test`. Lihat [panduan Google Drive](docs/google-drive.md).
+Installer memasang Rclone dari installer resminya jika belum tersedia. Lalu jalankan `alldbackup drive setup`. Untuk server tanpa browser, konfigurasi remote Rclone di komputer yang memiliki browser, lalu salin konfigurasi Rclone yang terlindungi ke server. Aktifkan remote di YAML dan jalankan `alldbackup drive test`. Lihat [panduan Google Drive](docs/google-drive.md).
 
 Jika unggahan gagal, arsip dan checksum lokal tetap disimpan. Perintah `run` berikutnya akan mencoba kembali unggahan yang tertunda sebelum retensi lokal dapat menghapusnya. Remote Rclone juga dapat menggunakan remote terenkripsi `crypt`.
 

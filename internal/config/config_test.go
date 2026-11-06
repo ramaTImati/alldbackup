@@ -31,6 +31,9 @@ func TestDefaultsForAndRoundTrip(t *testing.T) {
 	if loaded.Jobs[0].Schedule != DefaultJobSchedule {
 		t.Fatalf("missing schedule = %q, want default %q", loaded.Jobs[0].Schedule, DefaultJobSchedule)
 	}
+	if loaded.Jobs[0].GoogleDrivePath != "db1" {
+		t.Fatalf("missing Google Drive path = %q, want job name db1", loaded.Jobs[0].GoogleDrivePath)
+	}
 	if err := Write(path, c); !os.IsExist(err) {
 		t.Fatalf("second write error = %v, want already exists", err)
 	}
@@ -46,7 +49,7 @@ func TestValidateRejectsTraversalDuplicateAndMissingFields(t *testing.T) {
 	if err := c.Validate(); err == nil {
 		t.Fatal("accepted duplicate job names")
 	}
-	c.Jobs = []Job{{Name: "db", Enabled: true, Schedule: DefaultJobSchedule, Driver: "postgres", Source: "host", Database: "app", Username: "backup", PasswordEnv: "DB_PASS", Host: "localhost", Port: 5432}}
+	c.Jobs = []Job{{Name: "db", Enabled: true, Schedule: DefaultJobSchedule, GoogleDrivePath: "team/db", Driver: "postgres", Source: "host", Database: "app", Username: "backup", PasswordEnv: "DB_PASS", Host: "localhost", Port: 5432}}
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +61,7 @@ func TestValidateRejectsTraversalDuplicateAndMissingFields(t *testing.T) {
 
 func TestScheduleValidation(t *testing.T) {
 	c := Defaults()
-	job := Job{Name: "db", Enabled: true, Driver: "sqlite", Source: "host", File: "/tmp/db.sqlite", Schedule: "*/15 1-5 * * 1-5"}
+	job := Job{Name: "db", Enabled: true, Driver: "sqlite", Source: "host", File: "/tmp/db.sqlite", Schedule: "*/15 1-5 * * 1-5", GoogleDrivePath: "team/db"}
 	c.Jobs = []Job{job}
 	if err := c.Validate(); err != nil {
 		t.Fatalf("valid schedule rejected: %v", err)
@@ -90,9 +93,51 @@ func TestLoadDefaultsMissingJobScheduleToMidnight(t *testing.T) {
 	if got := c.Jobs[0].Schedule; got != DefaultJobSchedule {
 		t.Fatalf("missing schedule = %q, want %q", got, DefaultJobSchedule)
 	}
+	if got := c.Jobs[0].GoogleDrivePath; got != "sqlite" {
+		t.Fatalf("missing Google Drive path = %q, want job name sqlite", got)
+	}
 	wantRcloneConfig := filepath.Join(filepath.Dir(path), "rclone.conf")
 	if got := c.Storage.GoogleDrive.ConfigFile; got != wantRcloneConfig {
 		t.Fatalf("default Rclone config path = %q, want %q", got, wantRcloneConfig)
+	}
+}
+
+func TestAddJobDefaultsGoogleDrivePathToJobName(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := Write(path, DefaultsFor(path)); err != nil {
+		t.Fatal(err)
+	}
+	job := Job{Name: "archive-db", Driver: "sqlite", Source: "host", File: "/tmp/db.sqlite"}
+	if err := AddJob(path, job); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Jobs[0].GoogleDrivePath; got != job.Name {
+		t.Fatalf("added job Google Drive path = %q, want %q", got, job.Name)
+	}
+}
+
+func TestGoogleDrivePathValidation(t *testing.T) {
+	c := Defaults()
+	c.Jobs = []Job{{Name: "db", Enabled: true, Schedule: DefaultJobSchedule, Driver: "sqlite", Source: "host", File: "/tmp/db.sqlite", GoogleDrivePath: "team/databases/db"}}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("valid relative path rejected: %v", err)
+	}
+	for _, value := range []string{"", "/absolute", "../outside", "team/../outside", "team//db", `team\\db`, "team/"} {
+		c.Jobs[0].GoogleDrivePath = value
+		if err := c.Validate(); err == nil {
+			t.Errorf("accepted unsafe Google Drive path %q", value)
+		}
+	}
+	c.Jobs = []Job{
+		{Name: "db1", Enabled: true, Schedule: DefaultJobSchedule, Driver: "sqlite", Source: "host", File: "/tmp/db1.sqlite", GoogleDrivePath: "team/db"},
+		{Name: "db2", Enabled: true, Schedule: DefaultJobSchedule, Driver: "sqlite", Source: "host", File: "/tmp/db2.sqlite", GoogleDrivePath: "team/db"},
+	}
+	if err := c.Validate(); err == nil {
+		t.Fatal("accepted duplicate Google Drive paths")
 	}
 }
 
@@ -152,6 +197,11 @@ func TestExampleConfigParses(t *testing.T) {
 	}
 	if len(c.Jobs) != 4 {
 		t.Fatalf("example has %d jobs, want 4", len(c.Jobs))
+	}
+	for _, job := range c.Jobs {
+		if job.GoogleDrivePath == "" {
+			t.Errorf("job %q has no Google Drive path", job.Name)
+		}
 	}
 	if c.TimestampTimezone != "+07:00" {
 		t.Fatalf("example timestamp_timezone = %q, want +07:00", c.TimestampTimezone)

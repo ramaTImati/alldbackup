@@ -76,7 +76,7 @@ func TestUploadCopiesAndVerifiesArchiveAndChecksum(t *testing.T) {
 	}
 	exec := &fakeExec{}
 	drive := &Rclone{Exec: exec, Config: config.DriveConfig{Enabled: true, Remote: "gdrive:root", ConfigFile: "/etc/alldbackup/rclone.conf", Timeout: "1m", Retries: 2}}
-	if err := drive.Upload(context.Background(), config.Job{Name: "db"}, path); err != nil {
+	if err := drive.Upload(context.Background(), config.Job{Name: "db", GoogleDrivePath: "team/finance"}, path); err != nil {
 		t.Fatal(err)
 	}
 	if len(exec.calls) != 4 {
@@ -93,6 +93,12 @@ func TestUploadCopiesAndVerifiesArchiveAndChecksum(t *testing.T) {
 		if strings.Contains(strings.Join(call, " "), "password") {
 			t.Fatalf("unexpected credential in arguments: %#v", call)
 		}
+	}
+	if got, want := exec.calls[0][len(exec.calls[0])-1], "gdrive:root/team/finance/backup.zip"; got != want {
+		t.Fatalf("uploaded archive remote path = %q, want %q", got, want)
+	}
+	if got, want := exec.calls[2][len(exec.calls[2])-1], "gdrive:root/team/finance/backup.zip.sha256"; got != want {
+		t.Fatalf("uploaded checksum remote path = %q, want %q", got, want)
 	}
 }
 
@@ -126,7 +132,7 @@ func TestRemoteRetentionDeletesOnlyRecognizedArchivePaths(t *testing.T) {
 	old := archive.Filename(time.Now().Add(-40 * 24 * time.Hour))
 	exec := &fakeExec{listing: old + "\n" + old + ".sha256\nnotes.txt\n"}
 	drive := &Rclone{Exec: exec, Config: config.DriveConfig{Enabled: true, Remote: "gdrive:root", Timeout: "1m", Retries: 1, RetentionDays: 7}}
-	if err := drive.Prune(context.Background(), config.Job{Name: "db"}, time.Now()); err != nil {
+	if err := drive.Prune(context.Background(), config.Job{Name: "db", GoogleDrivePath: "team/dbs"}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if len(exec.calls) != 3 {
@@ -134,5 +140,11 @@ func TestRemoteRetentionDeletesOnlyRecognizedArchivePaths(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(exec.calls[1], " "), old) || !strings.Contains(strings.Join(exec.calls[2], " "), old+".sha256") {
 		t.Fatalf("unexpected delete paths: %#v", exec.calls)
+	}
+	if got, want := exec.calls[0][len(exec.calls[0])-1], "gdrive:root/team/dbs"; got != want {
+		t.Fatalf("remote retention directory = %q, want %q", got, want)
+	}
+	if got, want := exec.calls[1][len(exec.calls[1])-1], "gdrive:root/team/dbs/"+old; got != want {
+		t.Fatalf("remote deletion path = %q, want %q", got, want)
 	}
 }

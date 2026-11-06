@@ -42,7 +42,7 @@ func (r *Rclone) Test(ctx context.Context) error {
 func JobDirectory(root string, job config.Job) string { return filepath.Join(root, job.Name) }
 
 func (r *Rclone) Upload(ctx context.Context, job config.Job, localPath string) error {
-	remote := strings.TrimRight(r.Config.Remote, "/") + "/" + job.Name + "/" + filepath.Base(localPath)
+	remote := r.jobRemoteDir(job) + "/" + filepath.Base(localPath)
 	if err := r.copy(ctx, localPath, remote); err != nil {
 		return err
 	}
@@ -100,7 +100,7 @@ func (r *Rclone) Prune(ctx context.Context, job config.Job, now time.Time) error
 	if days == 0 {
 		return nil
 	}
-	remoteDir := strings.TrimRight(r.Config.Remote, "/") + "/" + job.Name
+	remoteDir := r.jobRemoteDir(job)
 	callCtx, cancel := context.WithTimeout(ctx, mustDuration(r.Config.Timeout))
 	listing, err := r.Exec.Output(callCtx, "rclone", r.args("lsf", "--files-only", "--max-depth=1", remoteDir), nil)
 	cancel()
@@ -137,6 +137,14 @@ func (r *Rclone) args(args ...string) []string {
 		return args
 	}
 	return append([]string{"--config", r.Config.ConfigFile}, args...)
+}
+
+func (r *Rclone) jobRemoteDir(job config.Job) string {
+	jobPath := job.GoogleDrivePath
+	if strings.TrimSpace(jobPath) == "" {
+		jobPath = job.Name
+	}
+	return strings.TrimRight(r.Config.Remote, "/") + "/" + jobPath
 }
 
 func PruneLocal(root string, job config.Job, days int, requireUploaded bool, now time.Time) error {

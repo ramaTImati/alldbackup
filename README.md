@@ -36,7 +36,7 @@ Install the database utility required by each enabled job: `mysqldump` or `maria
 
    `init` creates an empty config with no database jobs. It does not overwrite a config that already exists.
 
-3. Add a database job and its password. `config add` is interactive and asks for a `password_env` name and a five-field cron schedule. The schedule prompt defaults to `0 0 * * *` (daily at midnight in the server's timezone) if left blank. The command does not ask for or save the password.
+3. Add a database job and its password. `config add` is interactive and asks for a `password_env` name, a five-field cron schedule, and a Google Drive path. Defaults are daily at midnight (`0 0 * * *`) and the job name for its Drive path; press Enter to accept them. The command does not ask for or save the password.
 
    ```bash
    sudo alldbackup config add
@@ -83,7 +83,7 @@ If you choose a custom config path, for example `sudo alldbackup --config /opt/a
 
 ## Configuration
 
-The default YAML file is `/etc/alldbackup/config.yaml`. `config add` appends a job to its `jobs:` list. Set a `schedule` such as `0 2 * * *` for each job. If the field is omitted or blank, it defaults to `0 0 * * *` (daily at midnight in the server's timezone). See [`configs/config.example.yaml`](configs/config.example.yaml) for complete host and Docker examples.
+The default YAML file is `/etc/alldbackup/config.yaml`. `config add` appends a job to its `jobs:` list. Set a `schedule` such as `0 2 * * *` for each job. If omitted or blank, it defaults to `0 0 * * *` (daily at server midnight). Set `google_drive_path` to the job's folder under `storage.google_drive.remote`; if omitted, it defaults to the job name. See [`configs/config.example.yaml`](configs/config.example.yaml) for complete host and Docker examples.
 
 For SQL jobs, `password_env` must match a key in `/etc/alldbackup/secrets.env` or an environment variable. Environment variables take precedence over the secrets file. For example, if the job has `password_env: MYSQL_BACKUP_PASSWORD`, store `MYSQL_BACKUP_PASSWORD=...` in the secrets file. Do not put the password itself in YAML or a process argument.
 
@@ -91,7 +91,7 @@ Set the top-level `timestamp_timezone` to `UTC` (the default) or a fixed offset 
 
 ## Google Drive
 
-Rclone's binary is installed automatically if it is missing, but you must still create and authorize a remote. Run `sudo alldbackup drive setup`; it stores the remote in `/etc/alldbackup/rclone.conf` by default. This dedicated file does not overwrite your existing per-user Rclone config. Then enable `storage.google_drive.enabled` in `/etc/alldbackup/config.yaml` and run `sudo alldbackup drive test`. See the [Google Drive guide](docs/google-drive.md).
+Rclone's binary is installed automatically if it is missing, but you must still create and authorize a remote. Run `sudo alldbackup drive setup`; it stores the remote in `/etc/alldbackup/rclone.conf` by default. This dedicated file does not overwrite your existing per-user Rclone config. Enable `storage.google_drive.enabled` in `/etc/alldbackup/config.yaml`; each job's `google_drive_path` selects its folder under the shared remote. Then run `sudo alldbackup drive test`. See the [Google Drive guide](docs/google-drive.md).
 
 Failed uploads keep their local archive and checksum. A later `run` retries pending uploads before local retention can remove them. The Rclone remote can be an encrypted `crypt` remote.
 
@@ -170,7 +170,7 @@ Pasang utilitas basis data yang diperlukan setiap job aktif: `mysqldump` atau `m
 
    Perintah `init` membuat konfigurasi kosong tanpa job basis data. Konfigurasi yang sudah ada tidak akan ditimpa.
 
-3. Tambahkan job basis data dan password-nya. `config add` berjalan interaktif dan meminta nama `password_env` serta jadwal cron lima kolom. Jika jadwal dikosongkan, nilainya menjadi `0 0 * * *` (setiap hari pukul 00:00 menurut zona waktu server). Perintah ini tidak meminta atau menyimpan password.
+3. Tambahkan job basis data dan password-nya. `config add` berjalan interaktif dan meminta nama `password_env`, jadwal cron lima kolom, serta path Google Drive. Nilai default-nya setiap hari pukul 00:00 (`0 0 * * *`) dan nama job untuk path Drive; tekan Enter untuk memakai default. Perintah ini tidak meminta atau menyimpan password.
 
    ```bash
    sudo alldbackup config add
@@ -217,7 +217,7 @@ Jika memakai path konfigurasi khusus, misalnya `sudo alldbackup --config /opt/al
 
 ### Konfigurasi
 
-File YAML default adalah `/etc/alldbackup/config.yaml`. Perintah `config add` menambahkan job ke daftar `jobs:`. Atur `schedule` lima kolom untuk setiap job, misalnya `0 2 * * *`. Jika field tidak ada atau kosong, nilainya menjadi `0 0 * * *` (setiap hari pukul 00:00 menurut zona waktu server). Lihat [`configs/config.example.yaml`](configs/config.example.yaml) untuk contoh lengkap job host dan Docker.
+File YAML default adalah `/etc/alldbackup/config.yaml`. Perintah `config add` menambahkan job ke daftar `jobs:`. Atur `schedule` lima kolom untuk setiap job, misalnya `0 2 * * *`. Jika tidak diisi, jadwalnya menjadi `0 0 * * *` (setiap hari pukul 00:00 menurut zona waktu server). Atur `google_drive_path` untuk menentukan folder job di bawah `storage.google_drive.remote`; jika kosong, nilainya mengikuti nama job. Lihat [`configs/config.example.yaml`](configs/config.example.yaml) untuk contoh lengkap job host dan Docker.
 
 Untuk job SQL, nilai `password_env` harus sama dengan nama key di `/etc/alldbackup/secrets.env` atau environment variable. Environment variable memiliki prioritas. Contoh: jika job berisi `password_env: MYSQL_BACKUP_PASSWORD`, simpan nilai dalam `secrets.env` sebagai `MYSQL_BACKUP_PASSWORD=...`. Jangan menaruh password dalam YAML atau argumen proses.
 
@@ -225,7 +225,7 @@ Atur `timestamp_timezone` tingkat atas ke `UTC` (default) atau offset tetap sepe
 
 ### Google Drive
 
-Binary Rclone dipasang otomatis jika belum tersedia, tetapi remote Google Drive tetap harus dibuat dan diotorisasi. Jalankan `sudo alldbackup drive setup`; secara default remote disimpan di `/etc/alldbackup/rclone.conf`. File khusus ini tidak menimpa konfigurasi Rclone per-user yang sudah ada. Setelah itu aktifkan `storage.google_drive.enabled` di `/etc/alldbackup/config.yaml`, lalu jalankan `sudo alldbackup drive test`. Lihat [panduan Google Drive](docs/google-drive.md).
+Binary Rclone dipasang otomatis jika belum tersedia, tetapi remote Google Drive tetap harus dibuat dan diotorisasi. Jalankan `sudo alldbackup drive setup`; secara default remote disimpan di `/etc/alldbackup/rclone.conf`. File khusus ini tidak menimpa konfigurasi Rclone per-user yang sudah ada. Aktifkan `storage.google_drive.enabled` di `/etc/alldbackup/config.yaml`; `google_drive_path` pada setiap job menentukan folder tujuan di bawah remote bersama. Lalu jalankan `sudo alldbackup drive test`. Lihat [panduan Google Drive](docs/google-drive.md).
 
 Jika unggahan gagal, arsip dan checksum lokal tetap disimpan. Perintah `run` berikutnya akan mencoba kembali unggahan yang tertunda sebelum retensi lokal dapat menghapusnya. Remote Rclone juga dapat menggunakan remote terenkripsi `crypt`.
 

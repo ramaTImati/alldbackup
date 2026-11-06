@@ -19,6 +19,7 @@ jobs:
   - name: mysql-host
     enabled: true
     schedule: "0 2 * * *"
+    google_drive_path: mysql-host
     driver: mysql
     source: host
     host: 127.0.0.1
@@ -30,6 +31,7 @@ jobs:
   - name: mariadb-docker
     enabled: true
     schedule: "30 2 * * *"
+    google_drive_path: applications/mariadb
     driver: mariadb
     source: docker
     container: mariadb-server
@@ -40,6 +42,7 @@ jobs:
   - name: postgres-docker
     enabled: true
     schedule: "0 3 * * *"
+    google_drive_path: databases/postgres
     driver: postgres
     source: docker
     container: postgres-db
@@ -50,6 +53,7 @@ jobs:
   - name: sqlite-host
     enabled: true
     schedule: "30 3 * * *"
+    google_drive_path: files/sqlite-host
     driver: sqlite
     source: host
     file: /srv/application/database.sqlite

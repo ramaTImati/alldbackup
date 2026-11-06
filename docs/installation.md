@@ -41,7 +41,7 @@ Start the interactive job editor:
 sudo alldbackup config add
 ```
 
-Enter a lowercase job name, database driver, source (`host` or `docker`), and connection details. For SQL databases, enter the name of an environment variable for the password, such as `MYSQL_BACKUP_PASSWORD`. The command then asks for a five-field cron schedule, defaulting to `0 0 * * *` (daily at server midnight); press Enter to accept it or enter a different schedule. The command saves the job to `/etc/alldbackup/config.yaml`; it never prompts for the password value. SQLite does not need a password.
+Enter a lowercase job name, database driver, source (`host` or `docker`), and connection details. For SQL databases, enter the name of an environment variable for the password, such as `MYSQL_BACKUP_PASSWORD`. The command asks for a five-field cron schedule (default `0 0 * * *`) and a Google Drive path (default: the job name); press Enter to accept either default. The command saves the job to `/etc/alldbackup/config.yaml`; it never prompts for the password value. SQLite does not need a password.
 
 Alternatively, edit `/etc/alldbackup/config.yaml` directly. The complete [`config.example.yaml`](../configs/config.example.yaml) shows all supported drivers and sources. In a Docker job, `container` is the container name and the dump utility must be inside that container. In a host job, the dump utility must be installed on the Linux server.
 

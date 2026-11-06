@@ -60,12 +60,28 @@ storage:
     retries: 3
 ```
 
-`remote` is the Rclone remote name and folder. Each job uploads to a child folder, for example:
+`remote` is the shared Rclone remote base. Each job chooses its relative destination with `google_drive_path`:
+
+```yaml
+storage:
+  google_drive:
+    remote: gdrive:alldbackup
+
+jobs:
+  - name: production
+    google_drive_path: teams/finance/production
+```
+
+That job uploads to:
 
 ```text
-gdrive:alldbackup/production/<timestamp>.zip
-gdrive:alldbackup/production/<timestamp>.zip.sha256
+gdrive:alldbackup/teams/finance/production/<timestamp>.zip
+gdrive:alldbackup/teams/finance/production/<timestamp>.zip.sha256
 ```
+
+If `google_drive_path` is blank or omitted, it defaults to the job name. Each job can use a different nested path.
+
+Changing a job's path redirects future uploads. Existing files remain in the previous Drive folder; alldbackup does not move them.
 
 Validate the settings and test access:
 

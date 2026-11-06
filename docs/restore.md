@@ -2,7 +2,7 @@
 
 By default, a job named `production` stores its ZIP files under `/var/backups/alldbackup/production/`. If `storage.local.path` was changed, look under `<configured-path>/<job-name>/`.
 
-If local storage is disabled, download both the ZIP and its `.sha256` sidecar from Google Drive before verifying. Replace the timestamp below with the filename shown in the remote:
+If local storage is disabled, download both the ZIP and its `.sha256` sidecar from Google Drive before verifying. The example assumes the `production` job has `google_drive_path: production`; use that job's configured path if it differs. Replace the timestamp below with the filename shown in the remote:
 
 ```bash
 sudo rclone --config /etc/alldbackup/rclone.conf copyto 'gdrive:alldbackup/production/20261106T090000.123456789+0700.zip' /tmp/production.zip

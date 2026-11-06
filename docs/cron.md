@@ -11,6 +11,7 @@ jobs:
   - name: mysql-host
     enabled: true
     schedule: "0 2 * * *" # daily at 02:00
+    google_drive_path: mysql-host
     driver: mysql
     source: host
     # connection fields...
@@ -18,6 +19,7 @@ jobs:
   - name: postgres-docker
     enabled: true
     schedule: "30 2 * * *" # daily at 02:30
+    google_drive_path: production/postgres
     driver: postgres
     source: docker
     # connection fields...
@@ -25,6 +27,7 @@ jobs:
   - name: sqlite-host
     enabled: true
     # omitted schedule defaults to daily at 00:00 server time
+    google_drive_path: archives/sqlite
     driver: sqlite
     source: host
     # connection fields...

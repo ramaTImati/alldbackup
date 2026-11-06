@@ -25,6 +25,7 @@ Example PostgreSQL job in `/etc/alldbackup/config.yaml`:
 jobs:
   - name: production-db
     enabled: true
+    google_drive_path: production/postgres
     driver: postgres
     source: docker
     container: postgres-db

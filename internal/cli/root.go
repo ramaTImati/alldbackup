@@ -156,9 +156,9 @@ func configCommand(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "NAME\tENABLED\tSCHEDULE\tDRIVER\tSOURCE\tDATABASE")
+			fmt.Fprintln(cmd.OutOrStdout(), "NAME\tENABLED\tSCHEDULE\tGOOGLE_DRIVE_PATH\tDRIVER\tSOURCE\tDATABASE")
 			for _, job := range c.Jobs {
-				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%t\t%s\t%s\t%s\t%s\n", job.Name, job.Enabled, job.Schedule, job.Driver, job.Source, job.Database)
+				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%t\t%s\t%s\t%s\t%s\t%s\n", job.Name, job.Enabled, job.Schedule, job.GoogleDrivePath, job.Driver, job.Source, job.Database)
 			}
 			return nil
 		}},
@@ -234,6 +234,9 @@ func addJobCommand(o *options) *cobra.Command {
 			}
 		}
 		if job.Schedule, err = prompt(reader, "Schedule (5-field cron)", config.DefaultJobSchedule); err != nil {
+			return err
+		}
+		if job.GoogleDrivePath, err = prompt(reader, "Google Drive path (relative to storage.google_drive.remote)", job.Name); err != nil {
 			return err
 		}
 		job.Enabled = true

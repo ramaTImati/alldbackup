@@ -51,18 +51,19 @@ type DriveConfig struct {
 }
 
 type Job struct {
-	Name        string `yaml:"name"`
-	Enabled     bool   `yaml:"enabled"`
-	Schedule    string `yaml:"schedule,omitempty"`
-	Driver      string `yaml:"driver"`
-	Source      string `yaml:"source"`
-	Host        string `yaml:"host,omitempty"`
-	Port        int    `yaml:"port,omitempty"`
-	Container   string `yaml:"container,omitempty"`
-	Database    string `yaml:"database,omitempty"`
-	Username    string `yaml:"username,omitempty"`
-	PasswordEnv string `yaml:"password_env,omitempty"`
-	File        string `yaml:"file,omitempty"`
+	Name            string `yaml:"name"`
+	Enabled         bool   `yaml:"enabled"`
+	Schedule        string `yaml:"schedule,omitempty"`
+	GoogleDrivePath string `yaml:"google_drive_path,omitempty"`
+	Driver          string `yaml:"driver"`
+	Source          string `yaml:"source"`
+	Host            string `yaml:"host,omitempty"`
+	Port            int    `yaml:"port,omitempty"`
+	Container       string `yaml:"container,omitempty"`
+	Database        string `yaml:"database,omitempty"`
+	Username        string `yaml:"username,omitempty"`
+	PasswordEnv     string `yaml:"password_env,omitempty"`
+	File            string `yaml:"file,omitempty"`
 }
 
 func Defaults() Config {
@@ -157,6 +158,7 @@ func (c Config) Validate() error {
 		return errors.New("storage.google_drive.config_file is required")
 	}
 	seen := make(map[string]bool, len(c.Jobs))
+	seenDrivePaths := make(map[string]string, len(c.Jobs))
 	for i, j := range c.Jobs {
 		prefix := fmt.Sprintf("jobs[%d]", i)
 		if !jobNamePattern.MatchString(j.Name) {
@@ -173,6 +175,13 @@ func (c Config) Validate() error {
 		if _, err := parser.Parse(j.Schedule); err != nil {
 			return fmt.Errorf("%s.schedule must be a valid five-field cron expression: %w", prefix, err)
 		}
+		if !validGoogleDrivePath(j.GoogleDrivePath) {
+			return fmt.Errorf("%s.google_drive_path must be a relative path without empty, . or .. segments", prefix)
+		}
+		if other, ok := seenDrivePaths[j.GoogleDrivePath]; ok {
+			return fmt.Errorf("jobs %q and %q use the same google_drive_path %q", other, j.Name, j.GoogleDrivePath)
+		}
+		seenDrivePaths[j.GoogleDrivePath] = j.Name
 		switch j.Driver {
 		case "mysql", "mariadb", "postgres":
 			if strings.TrimSpace(j.Database) == "" || strings.TrimSpace(j.Username) == "" || strings.TrimSpace(j.PasswordEnv) == "" {
@@ -279,10 +288,8 @@ func AddJob(path string, job Job) error {
 		return err
 	}
 	job.Enabled = true
-	if strings.TrimSpace(job.Schedule) == "" {
-		job.Schedule = DefaultJobSchedule
-	}
 	c.Jobs = append(c.Jobs, job)
+	c.applyJobDefaults()
 	if err := c.Validate(); err != nil {
 		return err
 	}
@@ -307,7 +314,27 @@ func (c *Config) applyJobDefaults() {
 		if strings.TrimSpace(c.Jobs[i].Schedule) == "" {
 			c.Jobs[i].Schedule = DefaultJobSchedule
 		}
+		if strings.TrimSpace(c.Jobs[i].GoogleDrivePath) == "" {
+			c.Jobs[i].GoogleDrivePath = c.Jobs[i].Name
+		}
 	}
+}
+
+func validGoogleDrivePath(value string) bool {
+	if value == "" || strings.TrimSpace(value) != value || strings.Contains(value, "\\") || strings.HasPrefix(value, "/") {
+		return false
+	}
+	for _, component := range strings.Split(value, "/") {
+		if component == "" || component == "." || component == ".." {
+			return false
+		}
+		for _, r := range component {
+			if r < 0x20 || r == 0x7f {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func ReadSecrets(path string, warn func(string, ...any)) (map[string]string, error) {

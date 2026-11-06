@@ -18,49 +18,84 @@ Install the database utility required by each enabled job: `mysqldump` or `maria
 
 ## Install and create your first backup
 
-Install the latest verified release:
+1. Download and run the installer. The script is saved temporarily in `/tmp`; the installed program is `/usr/local/bin/alldbackup`.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/ramaTImati/alldbackup/main/scripts/install.sh -o install.sh
-sudo bash install.sh
-sudo alldbackup init
-sudo alldbackup config add
-sudo alldbackup config validate
-sudo alldbackup doctor
-sudo alldbackup run --all
-```
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/ramaTImati/alldbackup/main/scripts/install.sh -o /tmp/alldbackup-install.sh
+   sudo bash /tmp/alldbackup-install.sh
+   rm /tmp/alldbackup-install.sh
+   ```
 
-`init` creates `/etc/alldbackup/config.yaml`, creates `/etc/alldbackup/secrets.env` with mode `0600`, and creates `/var/backups/alldbackup`. It will not overwrite an existing configuration. `config add` asks for job details and a password environment variable name; it never asks for the password itself.
+   The installer verifies the alldbackup release checksum. If `rclone` is missing, it also runs Rclone's official installer. This installs the binary but does not create a Google Drive remote or change an existing Rclone config. Rclone's installer needs `unzip`, `7z`, or `busybox` to extract its download.
+
+2. Create the default config, secrets file, and local backup directory:
+
+   ```bash
+   sudo alldbackup init
+   ```
+
+   `init` creates an empty config with no database jobs. It does not overwrite a config that already exists.
+
+3. Add a database job and its password. `config add` is interactive and asks for a `password_env` name; it does not ask for or save the password.
+
+   ```bash
+   sudo alldbackup config add
+   sudoedit /etc/alldbackup/secrets.env
+   ```
+
+   In `secrets.env`, add one `KEY=value` line using the exact environment variable name entered for the job, for example `MYSQL_BACKUP_PASSWORD=your-database-password`. SQLite jobs do not need a password. Keep this file readable only by the account that runs alldbackup; the default mode is `0600`.
+
+4. Validate the config and check database connectivity and dependencies:
+
+   ```bash
+   sudo alldbackup config validate
+   sudo alldbackup doctor
+   ```
+
+   For host jobs, the dump utility must be installed on this Linux host. For Docker jobs, the Docker CLI and daemon access must work, and the dump utility must exist inside the selected database container.
+
+5. Run one job or all enabled jobs:
+
+   ```bash
+   sudo alldbackup run --job production
+   # or
+   sudo alldbackup run --all
+   ```
+
+   Replace `production` with the job name in the config. A failed job does not stop later jobs in `--all`; the command returns a non-zero exit code if any job fails.
+
+### Default file locations
+
+| Purpose | Default location | Details |
+| --- | --- | --- |
+| alldbackup binary | `/usr/local/bin/alldbackup` | Installed or upgraded by the installer. |
+| Main config | `/etc/alldbackup/config.yaml` | Database jobs, storage, retention, and timestamp offset. |
+| Passwords | `/etc/alldbackup/secrets.env` | `KEY=value` lines; mode `0600`; not stored in YAML. |
+| Local backups | `/var/backups/alldbackup/<job-name>/` | One ZIP and one `.zip.sha256` sidecar per backup. |
+| Rclone binary | `/usr/bin/rclone` | Installed by Rclone's official installer only when missing. |
+| Rclone config | Per-user; ask `rclone config file` | It contains remote credentials. The path depends on the account running alldbackup. |
+
+Inside each ZIP are `backup.sql` (MySQL, MariaDB, or PostgreSQL), or `database.sqlite`, plus `metadata.json`. Local backups are retained for 7 days by default; Google Drive backups for 30 days. Set either retention to `0` to disable deletion.
+
+If you choose a custom config path, for example `sudo alldbackup --config /opt/alldbackup/config.yaml init`, init places `secrets.env` and the default `backups/` directory beside that config. Pass the same `--config` path to every later command and to cron. You can change those paths in the YAML.
 
 ## Configuration
 
-Jobs are defined in one YAML file. See [`configs/config.example.yaml`](configs/config.example.yaml) for host and Docker examples covering all supported database types. Passwords stay out of YAML and process arguments.
+The default YAML file is `/etc/alldbackup/config.yaml`. `config add` appends a job to its `jobs:` list. You can also edit that file directly; see [`configs/config.example.yaml`](configs/config.example.yaml) for complete host and Docker examples.
 
-Set the top-level `timestamp_timezone` to `UTC` (the default) or a fixed offset such as `+07:00`. The archive filename uses that offset (for example, `...+0700.zip`), while `metadata.json` always records UTC.
+For SQL jobs, `password_env` must match a key in `/etc/alldbackup/secrets.env` or an environment variable. Environment variables take precedence over the secrets file. For example, if the job has `password_env: MYSQL_BACKUP_PASSWORD`, store `MYSQL_BACKUP_PASSWORD=...` in the secrets file. Do not put the password itself in YAML or a process argument.
 
-```yaml
-- name: production
-  enabled: true
-  driver: mysql
-  source: host
-  host: 127.0.0.1
-  port: 3306
-  database: production
-  username: backup_user
-  password_env: MYSQL_BACKUP_PASSWORD
-```
-
-Add the referenced value to the secrets file as `MYSQL_BACKUP_PASSWORD=...`, or provide it in the process environment. Environment variables take precedence. Keep the secrets file mode at `0600`. See the [configuration guide](docs/configuration.md) and [Docker guide](docs/docker.md).
+Set the top-level `timestamp_timezone` to `UTC` (the default) or a fixed offset such as `+07:00`. Filenames then use that offset (for example, `...+0700.zip`); `metadata.json` continues to record UTC. See the [configuration guide](docs/configuration.md) for the full YAML structure and [Docker guide](docs/docker.md) for container jobs.
 
 ## Google Drive
 
-The installer installs Rclone from its official installer if it is missing. Then run `alldbackup drive setup`. On a headless server, configure the Rclone remote on a machine with a browser and transfer its protected configuration to the server. Enable the remote in YAML and run `alldbackup drive test`. See the [Google Drive guide](docs/google-drive.md).
+Rclone's binary is installed automatically if it is missing, but you must still create and authorize a remote. Run `sudo alldbackup drive setup` as the same account that will run backups. Check the config file path with `sudo rclone config file`. If setting up on a computer with a browser, transfer its Rclone config to the path reported on the server and restrict it to its owner. Then enable `storage.google_drive.enabled` in `/etc/alldbackup/config.yaml` and run `sudo alldbackup drive test`. See the [Google Drive guide](docs/google-drive.md).
 
 Failed uploads keep their local archive and checksum. A later `run` retries pending uploads before local retention can remove them. The Rclone remote can be an encrypted `crypt` remote.
 
 ## Cron
 
-Run backups from cron using an absolute binary and configuration path. See the [cron guide](docs/cron.md). Example:
+To schedule backups, add the command to the crontab of the account that can read the secrets file, access the database/Docker daemon, and write the backup directory. The default config and binary paths are absolute. See the [cron guide](docs/cron.md). Example:
 
 ```cron
 0 2 * * * /usr/local/bin/alldbackup run --all --config /etc/alldbackup/config.yaml
@@ -68,10 +103,11 @@ Run backups from cron using an absolute binary and configuration path. See the [
 
 ## Verify and restore
 
-Check the ZIP checksum and archive contents:
+Find a ZIP under `/var/backups/alldbackup/<job-name>/`, then pass its full path to `verify`. Replace the example filename below with the one printed by `find`:
 
 ```bash
-alldbackup verify --file /var/backups/alldbackup/production/20261106T020000.123456789Z.zip
+sudo find /var/backups/alldbackup -mindepth 2 -maxdepth 2 -type f -name '*.zip' -print
+sudo alldbackup verify --file /var/backups/alldbackup/production/20261106T090000.123456789+0700.zip
 ```
 
 See the [restore guide](docs/restore.md) for each database type. Restore to a test database before relying on a backup for recovery.
@@ -112,49 +148,84 @@ Pasang utilitas basis data yang diperlukan setiap job aktif: `mysqldump` atau `m
 
 ### Instalasi dan backup pertama
 
-Pasang rilis terbaru yang checksum-nya telah diverifikasi:
+1. Unduh dan jalankan installer. Skrip disimpan sementara di `/tmp`; program dipasang ke `/usr/local/bin/alldbackup`.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/ramaTImati/alldbackup/main/scripts/install.sh -o install.sh
-sudo bash install.sh
-sudo alldbackup init
-sudo alldbackup config add
-sudo alldbackup config validate
-sudo alldbackup doctor
-sudo alldbackup run --all
-```
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/ramaTImati/alldbackup/main/scripts/install.sh -o /tmp/alldbackup-install.sh
+   sudo bash /tmp/alldbackup-install.sh
+   rm /tmp/alldbackup-install.sh
+   ```
 
-Perintah `init` membuat `/etc/alldbackup/config.yaml`, membuat `/etc/alldbackup/secrets.env` dengan mode `0600`, dan membuat direktori `/var/backups/alldbackup`. Perintah ini tidak menimpa konfigurasi yang sudah ada. `config add` meminta detail job dan nama environment variable untuk password; password itu sendiri tidak diminta.
+   Installer memeriksa checksum rilis alldbackup. Jika `rclone` belum ada, installer juga menjalankan installer resmi Rclone. Binary Rclone dipasang, tetapi remote Google Drive tidak dibuat dan konfigurasi Rclone yang sudah ada tidak diubah. Installer Rclone memerlukan `unzip`, `7z`, atau `busybox` untuk mengekstrak unduhannya.
+
+2. Buat file konfigurasi, file secrets, dan direktori backup lokal:
+
+   ```bash
+   sudo alldbackup init
+   ```
+
+   Perintah `init` membuat konfigurasi kosong tanpa job basis data. Konfigurasi yang sudah ada tidak akan ditimpa.
+
+3. Tambahkan job basis data dan password-nya. `config add` berjalan interaktif dan meminta nama `password_env`; perintah ini tidak meminta atau menyimpan password.
+
+   ```bash
+   sudo alldbackup config add
+   sudoedit /etc/alldbackup/secrets.env
+   ```
+
+   Di `secrets.env`, tambahkan satu baris `KEY=value` dengan nama environment variable yang sama dengan yang dimasukkan untuk job, misalnya `MYSQL_BACKUP_PASSWORD=password-basis-data-anda`. Job SQLite tidak memerlukan password. Batasi file ini agar hanya dapat dibaca akun yang menjalankan alldbackup; mode default-nya `0600`.
+
+4. Validasi konfigurasi dan periksa koneksi serta dependensi:
+
+   ```bash
+   sudo alldbackup config validate
+   sudo alldbackup doctor
+   ```
+
+   Untuk job host, utilitas dump harus terpasang di server Linux ini. Untuk job Docker, Docker CLI dan akses daemon harus berfungsi, serta utilitas dump harus tersedia di dalam container basis data yang dipilih.
+
+5. Jalankan satu job atau semua job aktif:
+
+   ```bash
+   sudo alldbackup run --job production
+   # atau
+   sudo alldbackup run --all
+   ```
+
+   Ganti `production` dengan nama job di konfigurasi. Jika satu job gagal saat `--all`, job berikutnya tetap dijalankan. Perintah berakhir dengan kode non-zero jika ada job yang gagal.
+
+#### Lokasi file default
+
+| Kegunaan | Lokasi default | Keterangan |
+| --- | --- | --- |
+| Binary alldbackup | `/usr/local/bin/alldbackup` | Dipasang atau diperbarui oleh installer. |
+| Konfigurasi utama | `/etc/alldbackup/config.yaml` | Job basis data, storage, retensi, dan offset timestamp. |
+| Password | `/etc/alldbackup/secrets.env` | Baris `KEY=value`, mode `0600`; bukan disimpan di YAML. |
+| Backup lokal | `/var/backups/alldbackup/<nama-job>/` | Satu file ZIP dan satu file checksum `.zip.sha256` per backup. |
+| Binary Rclone | `/usr/bin/rclone` | Dipasang oleh installer resmi Rclone hanya jika belum ada. |
+| Konfigurasi Rclone | Per akun; lihat `rclone config file` | Berisi kredensial remote. Lokasinya mengikuti akun yang menjalankan alldbackup. |
+
+Di dalam ZIP terdapat `backup.sql` (MySQL, MariaDB, PostgreSQL) atau `database.sqlite`, serta `metadata.json`. Retensi backup lokal default 7 hari, sedangkan retensi Google Drive 30 hari. Atur retensi ke `0` untuk menonaktifkan penghapusan.
+
+Jika memakai path konfigurasi khusus, misalnya `sudo alldbackup --config /opt/alldbackup/config.yaml init`, perintah `init` menaruh `secrets.env` dan direktori default `backups/` di samping file konfigurasi. Sertakan path `--config` yang sama pada semua perintah berikutnya dan pada cron. Path tersebut juga dapat diubah di YAML.
 
 ### Konfigurasi
 
-Semua job ditulis dalam satu file YAML. Lihat [`configs/config.example.yaml`](configs/config.example.yaml) untuk contoh host dan Docker bagi semua jenis basis data yang didukung. Password tidak disimpan dalam YAML atau argumen proses.
+File YAML default adalah `/etc/alldbackup/config.yaml`. Perintah `config add` menambahkan job ke daftar `jobs:`. File tersebut juga dapat diedit langsung. Lihat [`configs/config.example.yaml`](configs/config.example.yaml) untuk contoh lengkap job host dan Docker.
 
-Atur `timestamp_timezone` tingkat atas ke `UTC` (default) atau offset tetap seperti `+07:00`. Nama arsip menggunakan offset tersebut (contoh `...+0700.zip`), sementara `metadata.json` tetap menyimpan waktu UTC.
+Untuk job SQL, nilai `password_env` harus sama dengan nama key di `/etc/alldbackup/secrets.env` atau environment variable. Environment variable memiliki prioritas. Contoh: jika job berisi `password_env: MYSQL_BACKUP_PASSWORD`, simpan nilai dalam `secrets.env` sebagai `MYSQL_BACKUP_PASSWORD=...`. Jangan menaruh password dalam YAML atau argumen proses.
 
-```yaml
-- name: production
-  enabled: true
-  driver: mysql
-  source: host
-  host: 127.0.0.1
-  port: 3306
-  database: production
-  username: backup_user
-  password_env: MYSQL_BACKUP_PASSWORD
-```
-
-Tambahkan nilai yang dirujuk ke file secrets dengan format `MYSQL_BACKUP_PASSWORD=...`, atau sediakan melalui environment proses. Nilai environment memiliki prioritas. Atur mode file secrets ke `0600`. Lihat [panduan konfigurasi](docs/configuration.md) dan [panduan Docker](docs/docker.md).
+Atur `timestamp_timezone` tingkat atas ke `UTC` (default) atau offset tetap seperti `+07:00`. Nama file memakai offset tersebut (contoh `...+0700.zip`); `metadata.json` tetap mencatat waktu UTC. Lihat [panduan konfigurasi](docs/configuration.md) untuk struktur YAML lengkap dan [panduan Docker](docs/docker.md) untuk job container.
 
 ### Google Drive
 
-Installer memasang Rclone dari installer resminya jika belum tersedia. Lalu jalankan `alldbackup drive setup`. Untuk server tanpa browser, konfigurasi remote Rclone di komputer yang memiliki browser, lalu salin konfigurasi Rclone yang terlindungi ke server. Aktifkan remote di YAML dan jalankan `alldbackup drive test`. Lihat [panduan Google Drive](docs/google-drive.md).
+Binary Rclone dipasang otomatis jika belum tersedia, tetapi remote Google Drive tetap harus dibuat dan diotorisasi. Jalankan `sudo alldbackup drive setup` sebagai akun yang akan menjalankan backup. Cek lokasi konfigurasi dengan `sudo rclone config file`. Jika setup dilakukan di komputer yang memiliki browser, salin file konfigurasi Rclone ke path yang dilaporkan server dan batasi izinnya hanya untuk pemilik file. Setelah itu aktifkan `storage.google_drive.enabled` di `/etc/alldbackup/config.yaml`, lalu jalankan `sudo alldbackup drive test`. Lihat [panduan Google Drive](docs/google-drive.md).
 
 Jika unggahan gagal, arsip dan checksum lokal tetap disimpan. Perintah `run` berikutnya akan mencoba kembali unggahan yang tertunda sebelum retensi lokal dapat menghapusnya. Remote Rclone juga dapat menggunakan remote terenkripsi `crypt`.
 
 ### Cron
 
-Jalankan backup melalui cron dengan path absolut untuk binary dan file konfigurasi. Lihat [panduan cron](docs/cron.md). Contoh:
+Untuk menjadwalkan backup, tambahkan perintah ke crontab akun yang dapat membaca file secrets, mengakses basis data/Docker daemon, dan menulis ke direktori backup. Path binary dan konfigurasi default sudah absolut. Lihat [panduan cron](docs/cron.md). Contoh:
 
 ```cron
 0 2 * * * /usr/local/bin/alldbackup run --all --config /etc/alldbackup/config.yaml
@@ -162,10 +233,11 @@ Jalankan backup melalui cron dengan path absolut untuk binary dan file konfigura
 
 ### Verifikasi dan pemulihan
 
-Periksa checksum ZIP dan isi arsip:
+Cari file ZIP di `/var/backups/alldbackup/<nama-job>/`, lalu berikan path lengkapnya ke `verify`. Ganti nama file contoh di bawah dengan nama yang ditampilkan oleh `find`:
 
 ```bash
-alldbackup verify --file /var/backups/alldbackup/production/20261106T020000.123456789Z.zip
+sudo find /var/backups/alldbackup -mindepth 2 -maxdepth 2 -type f -name '*.zip' -print
+sudo alldbackup verify --file /var/backups/alldbackup/production/20261106T090000.123456789+0700.zip
 ```
 
 Lihat [panduan pemulihan](docs/restore.md) untuk setiap jenis basis data. Lakukan restore ke basis data uji sebelum mengandalkan backup untuk pemulihan.

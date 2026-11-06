@@ -1,0 +1,49 @@
+version: 1
+secrets_file: /etc/alldbackup/secrets.env
+
+storage:
+  local:
+    enabled: true
+    path: /var/backups/alldbackup
+    retention_days: 7
+  google_drive:
+    enabled: false
+    remote: gdrive:alldbackup
+    retention_days: 30
+    timeout: 30m
+    retries: 3
+
+jobs:
+  - name: mysql-host
+    enabled: true
+    driver: mysql
+    source: host
+    host: 127.0.0.1
+    port: 3306
+    database: production
+    username: backup_user
+    password_env: MYSQL_BACKUP_PASSWORD
+
+  - name: mariadb-docker
+    enabled: true
+    driver: mariadb
+    source: docker
+    container: mariadb-server
+    database: application
+    username: backup_user
+    password_env: MARIADB_BACKUP_PASSWORD
+
+  - name: postgres-docker
+    enabled: true
+    driver: postgres
+    source: docker
+    container: postgres-db
+    database: production
+    username: backup_user
+    password_env: POSTGRES_BACKUP_PASSWORD
+
+  - name: sqlite-host
+    enabled: true
+    driver: sqlite
+    source: host
+    file: /srv/application/database.sqlite

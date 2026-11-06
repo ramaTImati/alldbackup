@@ -1,0 +1,5 @@
+/alldbackup
+/dist/
+/coverage.out
+/.test-tmp/
+*.partial

@@ -1,0 +1,32 @@
+name: Database integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  restore-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go mod tidy
+      - name: Install host database clients
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mysql-client-8.0 mariadb-client postgresql-client sqlite3
+      - name: Start database containers
+        run: docker compose -f tests/integration/docker-compose.yml up --build -d --wait
+      - name: Dump and restore integration tests
+        run: go test -v ./tests/integration/...
+        env:
+          ALLDBACKUP_INTEGRATION: "1"
+      - if: always()
+        run: docker compose -f tests/integration/docker-compose.yml down -v

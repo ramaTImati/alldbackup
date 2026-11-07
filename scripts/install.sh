@@ -28,7 +28,7 @@ if ! command -v rclone >/dev/null 2>&1; then
   fi
 fi
 
-archive="alldbackup_Linux_${arch}.tar.gz"
+archive="alldbackup_linux_${arch}.tar.gz"
 base_url="https://github.com/${repo}/releases/latest/download"
 
 curl -fsSL "${base_url}/${archive}" -o "${workdir}/${archive}"

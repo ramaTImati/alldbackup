@@ -21,7 +21,7 @@ case "$1" in
 esac
 UNAME
 chmod 0755 "$work/bin/uname"
-asset="alldbackup_Linux_${arch}.tar.gz"
+asset="alldbackup_linux_${arch}.tar.gz"
 cat > "$work/fixture/alldbackup" <<'BIN'
 #!/bin/sh
 echo "alldbackup test"

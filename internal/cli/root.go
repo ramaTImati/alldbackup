@@ -114,8 +114,11 @@ func initCommand(o *options) *cobra.Command {
 			return err
 		}
 		c := config.DefaultsFor(o.configPath)
-		if err := os.MkdirAll(c.Storage.Local.Path, 0700); err != nil {
+		if err := os.MkdirAll(c.Storage.Local.Path, 0755); err != nil {
 			return fmt.Errorf("create local backup directory: %w", err)
+		}
+		if err := os.Chmod(c.Storage.Local.Path, 0755); err != nil {
+			return fmt.Errorf("set local backup directory permissions: %w", err)
 		}
 		if err := os.MkdirAll(filepath.Dir(c.SecretsFile), 0700); err != nil {
 			return fmt.Errorf("create secrets directory: %w", err)
@@ -358,8 +361,11 @@ func doctorCommand(o *options) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		if err := os.MkdirAll(c.Storage.Local.Path, 0700); err != nil {
+		if err := os.MkdirAll(c.Storage.Local.Path, 0755); err != nil {
 			return fmt.Errorf("local storage is not writable: %w", err)
+		}
+		if err := os.Chmod(c.Storage.Local.Path, 0755); err != nil {
+			return fmt.Errorf("set local storage permissions: %w", err)
 		}
 		test, err := os.CreateTemp(c.Storage.Local.Path, ".alldbackup-doctor-*")
 		if err != nil {

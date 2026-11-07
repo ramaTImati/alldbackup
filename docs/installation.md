@@ -28,10 +28,20 @@ This creates an empty configuration, an empty secrets file, an empty Rclone conf
 | Main YAML config | `/etc/alldbackup/config.yaml` | `alldbackup init` |
 | Secrets file | `/etc/alldbackup/secrets.env` | `alldbackup init`, mode `0600` |
 | Rclone config | `/etc/alldbackup/rclone.conf` | `alldbackup init`, mode `0600`; add a remote with `alldbackup drive setup` |
-| Local backup root | `/var/backups/alldbackup/` | `alldbackup init` |
+| Local backup root | `/var/backups/alldbackup/` | `alldbackup init`; mode `0755` |
 | Rclone binary | `/usr/bin/rclone` | Rclone's official installer, only if absent |
 
-The directories `/etc/alldbackup` and `/var/backups/alldbackup` are created with restricted permissions. `/etc/alldbackup` is owned by root and private because it contains database passwords and Rclone OAuth credentials; a regular user will get `Permission denied` when trying to `cd` into it. Keep these permissions restricted. Use `sudoedit` to edit files there instead of changing the directory to mode `755`.
+`/etc/alldbackup` is owned by root and private because it contains database passwords and Rclone OAuth credentials; a regular user will get `Permission denied` when trying to `cd` into it. Use `sudoedit` to edit files there and keep it private. The backup destination is different: `/var/backups/alldbackup` and each job folder use mode `0755`, while completed ZIP and checksum files use `0644`. All local users can list and read backup contents, but only the account running alldbackup can write or delete them. This makes database contents readable to every local account on the server.
+
+Backups made by older versions remain private until their permissions are updated once. For the default path, run:
+
+```bash
+sudo chmod 0755 /var/backups/alldbackup
+sudo find /var/backups/alldbackup -mindepth 1 -path '*/.locks' -prune -o -type d -exec chmod 0755 {} +
+sudo find /var/backups/alldbackup -path '*/.locks' -prune -o -type f \( -name '*.zip' -o -name '*.zip.sha256' \) -exec chmod 0644 {} +
+```
+
+Replace `/var/backups/alldbackup` if `storage.local.path` uses a custom value.
 
 The dedicated Rclone config keeps Google Drive credentials beside alldbackup's other setup files without replacing a user's existing `~/.config/rclone/rclone.conf`.
 
@@ -102,7 +112,7 @@ For a job named `production`, the files are written under:
 
 The `+0700` suffix is an example for `timestamp_timezone: "+07:00"`; UTC is the default and uses a `Z` suffix. Each ZIP contains `backup.sql` or `database.sqlite` and `metadata.json`. The metadata timestamp is always UTC. Run `alldbackup verify --file /absolute/path/to/backup.zip` to check the ZIP and its checksum.
 
-By default, local backups older than 7 days are removed after a run. If Google Drive is enabled, failed or pending uploads are kept locally for retry. Set `storage.local.retention_days: 0` to disable local cleanup.
+`alldbackup init` writes `storage.local.retention_days: 7` into `config.yaml`. Local backups older than 7 days are removed after a run. If Google Drive is enabled, failed or pending uploads are kept locally for retry. Change this value to keep backups for another number of days; set it to `0` to disable local cleanup.
 
 ## Custom config path
 

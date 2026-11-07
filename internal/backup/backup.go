@@ -49,11 +49,17 @@ func (r *Runner) runJob(ctx context.Context, job config.Job, secrets map[string]
 	}
 	root := r.Config.Storage.Local.Path
 	dir := storage.JobDirectory(root, job)
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := os.MkdirAll(root, 0755); err != nil {
+		return fmt.Errorf("create backup storage directory: %w", err)
+	}
+	if err := os.Chmod(root, 0755); err != nil {
+		return fmt.Errorf("set backup storage directory permissions: %w", err)
+	}
+	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("create backup directory: %w", err)
 	}
-	if err := os.Chmod(dir, 0700); err != nil {
-		return fmt.Errorf("secure backup directory: %w", err)
+	if err := os.Chmod(dir, 0755); err != nil {
+		return fmt.Errorf("set backup directory permissions: %w", err)
 	}
 	lockDir := filepath.Join(root, ".locks")
 	if err := os.MkdirAll(lockDir, 0700); err != nil {

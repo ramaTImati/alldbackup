@@ -74,10 +74,10 @@ Install the database utility required by each enabled job: `mysqldump` or `maria
 | Main config | `/etc/alldbackup/config.yaml` | Database jobs, storage, retention, and timestamp offset. |
 | Passwords | `/etc/alldbackup/secrets.env` | `KEY=value` lines; mode `0600`; not stored in YAML. |
 | Rclone remotes | `/etc/alldbackup/rclone.conf` | Rclone OAuth credentials; mode `0600`; managed by `drive setup`. |
-| Local backups | `/var/backups/alldbackup/<job-name>/` | One ZIP and one `.zip.sha256` sidecar per backup. |
+| Local backups | `/var/backups/alldbackup/<job-name>/` | One ZIP and one `.zip.sha256` sidecar per backup; readable by all local users. |
 | Rclone binary | `/usr/bin/rclone` | Installed by Rclone's official installer only when missing. |
 
-Inside each ZIP are `backup.sql` (MySQL, MariaDB, or PostgreSQL), or `database.sqlite`, plus `metadata.json`. Local backups are retained for 7 days by default; Google Drive backups for 30 days. Set either retention to `0` to disable deletion.
+Inside each ZIP are `backup.sql` (MySQL, MariaDB, or PostgreSQL), or `database.sqlite`, plus `metadata.json`. Local backups are retained for 7 days by default through `storage.local.retention_days`; Google Drive backups for 30 days. Set either retention to `0` to disable deletion. Local users can read and copy completed backups, while only the alldbackup account can write or delete them.
 
 If you choose a custom config path, for example `sudo alldbackup --config /opt/alldbackup/config.yaml init`, init places `secrets.env`, `rclone.conf`, and the default `backups/` directory beside that config. Pass the same `--config` path to every later command and to cron. You can change those paths in the YAML.
 
@@ -214,10 +214,10 @@ Pasang utilitas basis data yang diperlukan setiap job aktif: `mysqldump` atau `m
 | Konfigurasi utama | `/etc/alldbackup/config.yaml` | Job basis data, storage, retensi, dan offset timestamp. |
 | Password | `/etc/alldbackup/secrets.env` | Baris `KEY=value`, mode `0600`; bukan disimpan di YAML. |
 | Remote Rclone | `/etc/alldbackup/rclone.conf` | Kredensial OAuth Rclone; mode `0600`; dikelola oleh `drive setup`. |
-| Backup lokal | `/var/backups/alldbackup/<nama-job>/` | Satu file ZIP dan satu file checksum `.zip.sha256` per backup. |
+| Backup lokal | `/var/backups/alldbackup/<nama-job>/` | Satu file ZIP dan satu file checksum `.zip.sha256` per backup; dapat dibaca semua user lokal. |
 | Binary Rclone | `/usr/bin/rclone` | Dipasang oleh installer resmi Rclone hanya jika belum ada. |
 
-Di dalam ZIP terdapat `backup.sql` (MySQL, MariaDB, PostgreSQL) atau `database.sqlite`, serta `metadata.json`. Retensi backup lokal default 7 hari, sedangkan retensi Google Drive 30 hari. Atur retensi ke `0` untuk menonaktifkan penghapusan.
+Di dalam ZIP terdapat `backup.sql` (MySQL, MariaDB, PostgreSQL) atau `database.sqlite`, serta `metadata.json`. Retensi backup lokal default 7 hari melalui `storage.local.retention_days`, sedangkan retensi Google Drive 30 hari. Atur retensi ke `0` untuk menonaktifkan penghapusan. Semua user lokal dapat membaca dan menyalin backup; hanya akun yang menjalankan alldbackup yang dapat menulis atau menghapusnya.
 
 Jika memakai path konfigurasi khusus, misalnya `sudo alldbackup --config /opt/alldbackup/config.yaml init`, perintah `init` menaruh `secrets.env`, `rclone.conf`, dan direktori default `backups/` di samping file konfigurasi. Sertakan path `--config` yang sama pada semua perintah berikutnya dan pada cron. Path tersebut juga dapat diubah di YAML.
 

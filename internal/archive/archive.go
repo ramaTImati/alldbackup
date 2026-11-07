@@ -57,7 +57,7 @@ func Create(dir string, metadata Metadata, dumpName string, dump func(io.Writer)
 	}
 	filenameTime := metadata.TimestampUTC
 	metadata.TimestampUTC = metadata.TimestampUTC.UTC()
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", fmt.Errorf("create backup directory: %w", err)
 	}
 	name := Filename(filenameTime)
@@ -129,6 +129,11 @@ func Create(dir string, metadata Metadata, dumpName string, dump func(io.Writer)
 	}
 	if err := os.WriteFile(partialSidecar, []byte(checksum+"  "+name+"\n"), 0600); err != nil {
 		return "", fmt.Errorf("write checksum: %w", err)
+	}
+	for _, path := range []string{partialPath, partialSidecar} {
+		if err := os.Chmod(path, 0644); err != nil {
+			return "", fmt.Errorf("make backup readable by all users: %w", err)
+		}
 	}
 	if err := os.Rename(partialPath, finalPath); err != nil {
 		return "", fmt.Errorf("publish ZIP: %w", err)

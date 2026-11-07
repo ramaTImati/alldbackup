@@ -95,6 +95,7 @@ Use one `KEY=value` entry per line. Values are read literally after the first `=
 | Config file | `/etc/alldbackup/config.yaml` | Main YAML file passed to CLI commands. |
 | `secrets_file` | `/etc/alldbackup/secrets.env` | Password values referenced by `password_env`. |
 | `storage.local.path` | `/var/backups/alldbackup` | Root for local archive folders. Each job uses a subdirectory, e.g. `/var/backups/alldbackup/production/`. |
+| `storage.local.retention_days` | `7` | Remove completed local backups older than this many days after a run; `0` disables cleanup. |
 | `storage.google_drive.config_file` | `/etc/alldbackup/rclone.conf` | Rclone remote credentials used by alldbackup. Created by `init` with mode `0600`; never put credentials directly in YAML. |
 
 Absolute paths are used as written. Relative `secrets_file` and `storage.local.path` paths are resolved relative to the directory containing the config YAML. If you initialize `/opt/alldbackup/config.yaml`, `init` defaults those paths to `/opt/alldbackup/secrets.env` and `/opt/alldbackup/backups`.
@@ -122,7 +123,9 @@ With `+07:00`, a filename looks like `20261106T090000.123456789+0700.zip`. The d
 
 `storage.local.path` is always required. If local storage is enabled, completed archives remain under `<path>/<job-name>/`. If only Google Drive is enabled, this path is a temporary spool for creating archives and retrying failed uploads.
 
-`retention_days: 0` disables cleanup. Local and Google Drive retention are configured independently. When Google Drive is enabled, local cleanup preserves archives that failed to upload and removes an archive only after a successful upload has been marked.
+`storage.local.retention_days` defaults to `7` in the generated YAML. `storage.google_drive.retention_days` independently defaults to `30`. Set either value to `0` to disable cleanup for that storage. When Google Drive is enabled, local cleanup preserves archives that failed to upload and removes an archive only after a successful upload has been marked.
+
+Local destination directories use mode `0755`, and completed ZIP and `.sha256` files use `0644`, so every local user can list and read backups. Only the account running alldbackup can write or delete them. Backups created before this permission change may need a one-time `chmod`; see the [installation guide](installation.md#2-initialize-the-default-files).
 
 Validate the YAML and list jobs with:
 

@@ -10,7 +10,12 @@ Use the interactive command:
 sudo alldbackup config add
 ```
 
-It asks for the job name, driver, source, database connection fields, the name of the password environment variable, a schedule, and a Google Drive path. Schedule defaults to `0 0 * * *` (daily at midnight in the server's timezone), and the Drive path defaults to the job name. Press Enter to accept either default. It appends the job to `/etc/alldbackup/config.yaml`; it does not save the password. Or edit the YAML directly with `sudoedit /etc/alldbackup/config.yaml`.
+It asks for the job name, driver, source, database connection fields, the name of the password environment variable, a schedule, and a Google Drive path. Schedule defaults to `0 0 * * *` (daily at midnight in the server's timezone), and the Drive path defaults to the job name. Press Enter to accept either default. It appends the job to `/etc/alldbackup/config.yaml`; it does not save the password. To edit the YAML manually, use `sudoedit` because `/etc/alldbackup` is private to root:
+
+```bash
+sudoedit /etc/alldbackup/config.yaml
+sudo alldbackup config validate
+```
 
 ### Example YAML
 

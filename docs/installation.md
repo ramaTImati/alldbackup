@@ -31,7 +31,9 @@ This creates an empty configuration, an empty secrets file, an empty Rclone conf
 | Local backup root | `/var/backups/alldbackup/` | `alldbackup init` |
 | Rclone binary | `/usr/bin/rclone` | Rclone's official installer, only if absent |
 
-The directories `/etc/alldbackup` and `/var/backups/alldbackup` are created with restricted permissions. The dedicated Rclone config keeps Google Drive credentials beside alldbackup's other setup files without replacing a user's existing `~/.config/rclone/rclone.conf`.
+The directories `/etc/alldbackup` and `/var/backups/alldbackup` are created with restricted permissions. `/etc/alldbackup` is owned by root and private because it contains database passwords and Rclone OAuth credentials; a regular user will get `Permission denied` when trying to `cd` into it. Keep these permissions restricted. Use `sudoedit` to edit files there instead of changing the directory to mode `755`.
+
+The dedicated Rclone config keeps Google Drive credentials beside alldbackup's other setup files without replacing a user's existing `~/.config/rclone/rclone.conf`.
 
 ## 3. Add a database job
 
@@ -43,7 +45,14 @@ sudo alldbackup config add
 
 Enter a lowercase job name, database driver, source (`host` or `docker`), and connection details. For SQL databases, enter the name of an environment variable for the password, such as `MYSQL_BACKUP_PASSWORD`. The command asks for a five-field cron schedule (default `0 0 * * *`) and a Google Drive path (default: the job name); press Enter to accept either default. The command saves the job to `/etc/alldbackup/config.yaml`; it never prompts for the password value. SQLite does not need a password.
 
-Alternatively, edit `/etc/alldbackup/config.yaml` directly. The complete [`config.example.yaml`](../configs/config.example.yaml) shows all supported drivers and sources. In a Docker job, `container` is the container name and the dump utility must be inside that container. In a host job, the dump utility must be installed on the Linux server.
+Alternatively, edit the YAML manually as root with `sudoedit` (you do not need to `cd` into `/etc/alldbackup`):
+
+```bash
+sudoedit /etc/alldbackup/config.yaml
+sudo alldbackup config validate
+```
+
+The complete [`config.example.yaml`](../configs/config.example.yaml) shows all supported drivers and sources. In a Docker job, `container` is the container name and the dump utility must be inside that container. In a host job, the dump utility must be installed on the Linux server.
 
 ## 4. Add database passwords
 

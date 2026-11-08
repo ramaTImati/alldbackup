@@ -137,7 +137,10 @@ func (r *Rclone) Prune(ctx context.Context, job config.Job, now time.Time) error
 	return nil
 }
 
-func (r *Rclone) CleanAll(ctx context.Context, job config.Job) (int, error) {
+func (r *Rclone) Clean(ctx context.Context, job config.Job, filename string) (int, error) {
+	if filename != "" && !archive.IsBackupName(filename) {
+		return 0, fmt.Errorf("invalid backup filename %q", filename)
+	}
 	remoteDir := r.jobRemoteDir(job)
 	callCtx, cancel := context.WithTimeout(ctx, mustDuration(r.Config.Timeout))
 	listing, err := r.Exec.Output(callCtx, "rclone", r.args("lsf", "--files-only", "--max-depth=1", remoteDir), nil)
@@ -153,9 +156,12 @@ func (r *Rclone) CleanAll(ctx context.Context, job config.Job) (int, error) {
 			continue
 		}
 		remoteFiles[name] = true
-		if archive.IsBackupName(name) {
+		if archive.IsBackupName(name) && (filename == "" || filename == name) {
 			names = append(names, name)
 		}
+	}
+	if filename != "" && len(names) == 0 {
+		return 0, nil
 	}
 	sort.Strings(names)
 	deleted := 0
@@ -236,7 +242,10 @@ func PruneLocal(root string, job config.Job, days int, requireUploaded bool, now
 	return nil
 }
 
-func CleanLocalAll(root string, job config.Job) (int, error) {
+func CleanLocal(root string, job config.Job, filename string) (int, error) {
+	if filename != "" && !archive.IsBackupName(filename) {
+		return 0, fmt.Errorf("invalid backup filename %q", filename)
+	}
 	dir := JobDirectory(root, job)
 	info, err := os.Lstat(dir)
 	if errors.Is(err, os.ErrNotExist) {
@@ -259,7 +268,7 @@ func CleanLocalAll(root string, job config.Job) (int, error) {
 	var failures []error
 	for _, entry := range entries {
 		name := entry.Name()
-		if !archive.IsBackupName(name) || entry.IsDir() {
+		if !archive.IsBackupName(name) || (filename != "" && filename != name) || entry.IsDir() {
 			continue
 		}
 		archivePath := filepath.Join(dir, name)

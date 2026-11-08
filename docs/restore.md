@@ -89,10 +89,14 @@ Check schema, row counts, and application behavior before redirecting production
 
 ## Clean backups manually
 
-Clean all local backups belonging to one job, plus its Google Drive backups when Google Drive is enabled:
+Clean one backup by its exact ZIP filename, or all backups belonging to one job. Cleanup runs against local storage and Google Drive when enabled:
 
 ```bash
+# One backup
+sudo alldbackup clean --job production 20261108T110259.289436409Z.zip
+
+# All backups for this job
 sudo alldbackup clean --job production --all
 ```
 
-`--all` is required. There is no single-file or per-storage selection. Local clean removes ZIPs, `.sha256` sidecars, and `.uploaded` markers, including local retry-spool files when local retention is disabled. Google Drive clean removes ZIPs and `.sha256` sidecars when enabled. The operation is scoped to the named job, ignores unrelated files, and never removes the job folder.
+Pass exactly one ZIP basename or `--all`. There is no per-storage selection. Local clean removes ZIPs, `.sha256` sidecars, and `.uploaded` markers, including local retry-spool files when local retention is disabled. Google Drive clean removes ZIPs and `.sha256` sidecars when enabled. The operation is scoped to the named job, ignores unrelated files, and never removes the job folder.

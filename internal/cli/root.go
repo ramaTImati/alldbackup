@@ -306,12 +306,19 @@ func runCommand(o *options) *cobra.Command {
 func cleanCommand(o *options) *cobra.Command {
 	var jobName string
 	var all bool
-	command := &cobra.Command{Use: "clean", Short: "Remove all backups for a job from every enabled storage", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
+	command := &cobra.Command{Use: "clean --job NAME [BACKUP.zip | --all]", Short: "Remove a backup or all backups for a job from every enabled storage", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		if strings.TrimSpace(jobName) == "" {
 			return errors.New("--job is required")
 		}
+		if all == (len(args) == 1) {
+			return errors.New("provide exactly one backup ZIP filename or --all")
+		}
+		filename := ""
 		if !all {
-			return errors.New("--all is required; clean removes every backup for the named job")
+			filename = args[0]
+			if !archive.IsBackupName(filename) {
+				return errors.New("backup filename must be an alldbackup ZIP basename")
+			}
 		}
 		c, err := load(o)
 		if err != nil {
@@ -322,26 +329,39 @@ func cleanCommand(o *options) *cobra.Command {
 			return fmt.Errorf("job %q was not found", jobName)
 		}
 		var failures []error
-		deleted, err := storage.CleanLocalAll(c.Storage.Local.Path, job)
+		deleted, err := storage.CleanLocal(c.Storage.Local.Path, job, filename)
+		totalDeleted := deleted
 		if deleted > 0 {
 			fmt.Fprintf(cmd.OutOrStdout(), "Cleaned %d local backup(s) for job %s\n", deleted, job.Name)
 		} else if err == nil {
-			fmt.Fprintf(cmd.OutOrStdout(), "No local backups found for job %s\n", job.Name)
+			if filename == "" {
+				fmt.Fprintf(cmd.OutOrStdout(), "No local backups found for job %s\n", job.Name)
+			} else {
+				fmt.Fprintf(cmd.OutOrStdout(), "No local copy of %s found for job %s\n", filename, job.Name)
+			}
 		}
 		if err != nil {
 			failures = append(failures, fmt.Errorf("local: %w", err))
 		}
 		if c.Storage.GoogleDrive.Enabled {
 			drive := storage.NewRclone(c.Storage.GoogleDrive)
-			deleted, err := drive.CleanAll(cmd.Context(), job)
+			deleted, err := drive.Clean(cmd.Context(), job, filename)
+			totalDeleted += deleted
 			if deleted > 0 {
 				fmt.Fprintf(cmd.OutOrStdout(), "Cleaned %d Google Drive backup(s) for job %s\n", deleted, job.Name)
 			} else if err == nil {
-				fmt.Fprintf(cmd.OutOrStdout(), "No Google Drive backups found for job %s\n", job.Name)
+				if filename == "" {
+					fmt.Fprintf(cmd.OutOrStdout(), "No Google Drive backups found for job %s\n", job.Name)
+				} else {
+					fmt.Fprintf(cmd.OutOrStdout(), "No Google Drive copy of %s found for job %s\n", filename, job.Name)
+				}
 			}
 			if err != nil {
 				failures = append(failures, fmt.Errorf("Google Drive: %w", err))
 			}
+		}
+		if filename != "" && totalDeleted == 0 && len(failures) == 0 {
+			failures = append(failures, fmt.Errorf("backup %q was not found in any active storage", filename))
 		}
 		return errors.Join(failures...)
 	}}

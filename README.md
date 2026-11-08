@@ -79,17 +79,13 @@ Install the database utility required by each enabled job: `mysqldump` or `maria
 
 Inside each ZIP are `backup.sql` (MySQL, MariaDB, or PostgreSQL), or `database.sqlite`, plus `metadata.json`. Local backups are retained for 7 days by default through `storage.local.retention_days`; Google Drive backups for 30 days. Set either retention to `0` to disable deletion. Local users can read and copy completed backups, while only the alldbackup account can write or delete them.
 
-Delete one backup by its exact filename, or delete every alldbackup backup for one job:
+Clean all local backups for one job and its Google Drive backups when Google Drive is enabled:
 
 ```bash
-# One backup
-sudo alldbackup delete --job fokus-camrent --file 20261108T110259.289436409Z.zip --local --google-drive
-
-# All backups belonging to this job
-sudo alldbackup delete --job fokus-camrent --all --local --google-drive
+sudo alldbackup clean --job fokus-camrent --all
 ```
 
-Choose at least one destination: `--local`, `--google-drive`, or both. `--file` and `--all` are mutually exclusive. `--all` is limited to the named job and removes only recognized alldbackup ZIPs and their sidecars; unrelated files and the job folder are kept. Google Drive deletion requires `storage.google_drive.enabled: true`.
+`--all` is required. There is no single-file or per-storage option: `clean` always handles the local backup directory and also Google Drive when enabled. This includes local retry-spool files when local retention is disabled. It is limited to the named job and removes only recognized alldbackup ZIPs and their sidecars; unrelated files and the job folder are kept.
 
 If you choose a custom config path, for example `sudo alldbackup --config /opt/alldbackup/config.yaml init`, init places `secrets.env`, `rclone.conf`, and the default `backups/` directory beside that config. Pass the same `--config` path to every later command and to cron. You can change those paths in the YAML.
 
@@ -231,17 +227,13 @@ Pasang utilitas basis data yang diperlukan setiap job aktif: `mysqldump` atau `m
 
 Di dalam ZIP terdapat `backup.sql` (MySQL, MariaDB, PostgreSQL) atau `database.sqlite`, serta `metadata.json`. Retensi backup lokal default 7 hari melalui `storage.local.retention_days`, sedangkan retensi Google Drive 30 hari. Atur retensi ke `0` untuk menonaktifkan penghapusan. Semua user lokal dapat membaca dan menyalin backup; hanya akun yang menjalankan alldbackup yang dapat menulis atau menghapusnya.
 
-Hapus satu backup dengan nama file yang tepat, atau semua backup alldbackup milik satu job:
+Bersihkan semua backup lokal untuk satu job dan backup Google Drive jika Google Drive diaktifkan:
 
 ```bash
-# Satu backup
-sudo alldbackup delete --job fokus-camrent --file 20261108T110259.289436409Z.zip --local --google-drive
-
-# Semua backup untuk job ini
-sudo alldbackup delete --job fokus-camrent --all --local --google-drive
+sudo alldbackup clean --job fokus-camrent --all
 ```
 
-Pilih minimal satu tujuan: `--local`, `--google-drive`, atau keduanya. `--file` dan `--all` tidak boleh dipakai bersamaan. `--all` hanya berlaku untuk job yang disebut dan menghapus ZIP alldbackup yang dikenali beserta file pendampingnya; file lain dan folder job tetap ada. Penghapusan Google Drive memerlukan `storage.google_drive.enabled: true`.
+Flag `--all` wajib digunakan. Tidak ada opsi untuk menghapus satu file atau memilih storage: `clean` selalu memproses direktori backup lokal dan juga Google Drive jika diaktifkan. Ini termasuk file spool lokal untuk retry upload saat retensi lokal dinonaktifkan. Perintah dibatasi pada job yang disebut dan hanya menghapus ZIP alldbackup yang dikenali beserta file pendampingnya; file lain dan folder job tetap ada.
 
 Jika memakai path konfigurasi khusus, misalnya `sudo alldbackup --config /opt/alldbackup/config.yaml init`, perintah `init` menaruh `secrets.env`, `rclone.conf`, dan direktori default `backups/` di samping file konfigurasi. Sertakan path `--config` yang sama pada semua perintah berikutnya dan pada cron. Path tersebut juga dapat diubah di YAML.
 

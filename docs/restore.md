@@ -87,16 +87,12 @@ The integrity check should return `ok`. Move the file to the application's expec
 
 Check schema, row counts, and application behavior before redirecting production traffic. A successful checksum and ZIP verification proves archive integrity, not that the restored application is correct. Schedule periodic restore tests on a disposable database.
 
-## Delete a backup manually
+## Clean backups manually
 
-Choose exactly one mode: `--file` for one exact ZIP, or `--all` for every alldbackup ZIP belonging to the named job. Select one or both storage targets:
+Clean all local backups belonging to one job, plus its Google Drive backups when Google Drive is enabled:
 
 ```bash
-# One backup
-sudo alldbackup delete --job production --file 20261108T110259.289436409Z.zip --local --google-drive
-
-# All backups for this job
-sudo alldbackup delete --job production --all --local --google-drive
+sudo alldbackup clean --job production --all
 ```
 
-Use only `--local` or only `--google-drive` to remove one copy. Google Drive deletion requires `storage.google_drive.enabled: true`. Local deletion removes ZIPs, `.sha256` sidecars, and `.uploaded` markers; Google Drive deletion removes ZIPs and `.sha256` sidecars. `--all` is scoped to the named job and ignores unrelated files. The job folder is never removed.
+`--all` is required. There is no single-file or per-storage selection. Local clean removes ZIPs, `.sha256` sidecars, and `.uploaded` markers, including local retry-spool files when local retention is disabled. Google Drive clean removes ZIPs and `.sha256` sidecars when enabled. The operation is scoped to the named job, ignores unrelated files, and never removes the job folder.

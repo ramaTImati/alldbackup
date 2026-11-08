@@ -59,7 +59,7 @@ func Execute() error {
 	root.PersistentFlags().StringVar(&o.configPath, "config", config.DefaultPath, "configuration file")
 	root.PersistentFlags().BoolVar(&o.verbose, "verbose", false, "enable debug logging")
 	root.PersistentFlags().BoolVar(&o.quiet, "quiet", false, "show errors only")
-	root.AddCommand(initCommand(o), configCommand(o), runCommand(o), deleteCommand(o), cronCommand(o), doctorCommand(o), driveCommand(o), verifyCommand(), versionCommand())
+	root.AddCommand(initCommand(o), configCommand(o), runCommand(o), cleanCommand(o), cronCommand(o), doctorCommand(o), driveCommand(o), verifyCommand(), versionCommand())
 	return root.Execute()
 }
 
@@ -303,21 +303,15 @@ func runCommand(o *options) *cobra.Command {
 	return command
 }
 
-func deleteCommand(o *options) *cobra.Command {
-	var jobName, filename string
-	var all, local, googleDrive bool
-	command := &cobra.Command{Use: "delete", Short: "Delete a backup from selected storage", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
+func cleanCommand(o *options) *cobra.Command {
+	var jobName string
+	var all bool
+	command := &cobra.Command{Use: "clean", Short: "Remove all backups for a job from every enabled storage", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
 		if strings.TrimSpace(jobName) == "" {
 			return errors.New("--job is required")
 		}
-		if all == (filename != "") {
-			return errors.New("choose exactly one of --file or --all")
-		}
-		if !all && !archive.IsBackupName(filename) {
-			return errors.New("--file must be an alldbackup ZIP filename, not a path")
-		}
-		if !local && !googleDrive {
-			return errors.New("select at least one destination with --local and/or --google-drive")
+		if !all {
+			return errors.New("--all is required; clean removes every backup for the named job")
 		}
 		c, err := load(o)
 		if err != nil {
@@ -327,56 +321,32 @@ func deleteCommand(o *options) *cobra.Command {
 		if !ok {
 			return fmt.Errorf("job %q was not found", jobName)
 		}
-		if googleDrive && !c.Storage.GoogleDrive.Enabled {
-			return errors.New("Google Drive storage is not enabled in the configuration")
-		}
 		var failures []error
-		if local {
-			if all {
-				deleted, err := storage.DeleteLocalAll(c.Storage.Local.Path, job)
-				if deleted > 0 {
-					fmt.Fprintf(cmd.OutOrStdout(), "Deleted %d local backup(s) for job %s\n", deleted, job.Name)
-				} else if err == nil {
-					fmt.Fprintf(cmd.OutOrStdout(), "No local backups found for job %s\n", job.Name)
-				}
-				if err != nil {
-					failures = append(failures, fmt.Errorf("local: %w", err))
-				}
-			} else {
-				if err := storage.DeleteLocal(c.Storage.Local.Path, job, filename); err != nil {
-					failures = append(failures, fmt.Errorf("local: %w", err))
-				} else {
-					fmt.Fprintf(cmd.OutOrStdout(), "Deleted local backup %s for job %s\n", filename, job.Name)
-				}
-			}
+		deleted, err := storage.CleanLocalAll(c.Storage.Local.Path, job)
+		if deleted > 0 {
+			fmt.Fprintf(cmd.OutOrStdout(), "Cleaned %d local backup(s) for job %s\n", deleted, job.Name)
+		} else if err == nil {
+			fmt.Fprintf(cmd.OutOrStdout(), "No local backups found for job %s\n", job.Name)
 		}
-		if googleDrive {
+		if err != nil {
+			failures = append(failures, fmt.Errorf("local: %w", err))
+		}
+		if c.Storage.GoogleDrive.Enabled {
 			drive := storage.NewRclone(c.Storage.GoogleDrive)
-			if all {
-				deleted, err := drive.DeleteAll(cmd.Context(), job)
-				if deleted > 0 {
-					fmt.Fprintf(cmd.OutOrStdout(), "Deleted %d Google Drive backup(s) for job %s\n", deleted, job.Name)
-				} else if err == nil {
-					fmt.Fprintf(cmd.OutOrStdout(), "No Google Drive backups found for job %s\n", job.Name)
-				}
-				if err != nil {
-					failures = append(failures, fmt.Errorf("Google Drive: %w", err))
-				}
-			} else {
-				if err := drive.Delete(cmd.Context(), job, filename); err != nil {
-					failures = append(failures, fmt.Errorf("Google Drive: %w", err))
-				} else {
-					fmt.Fprintf(cmd.OutOrStdout(), "Deleted Google Drive backup %s for job %s\n", filename, job.Name)
-				}
+			deleted, err := drive.CleanAll(cmd.Context(), job)
+			if deleted > 0 {
+				fmt.Fprintf(cmd.OutOrStdout(), "Cleaned %d Google Drive backup(s) for job %s\n", deleted, job.Name)
+			} else if err == nil {
+				fmt.Fprintf(cmd.OutOrStdout(), "No Google Drive backups found for job %s\n", job.Name)
+			}
+			if err != nil {
+				failures = append(failures, fmt.Errorf("Google Drive: %w", err))
 			}
 		}
 		return errors.Join(failures...)
 	}}
 	command.Flags().StringVar(&jobName, "job", "", "backup job name")
-	command.Flags().StringVar(&filename, "file", "", "exact alldbackup ZIP filename")
-	command.Flags().BoolVar(&all, "all", false, "delete every alldbackup ZIP for this job in selected storage")
-	command.Flags().BoolVar(&local, "local", false, "delete the local ZIP, checksum, and upload marker")
-	command.Flags().BoolVar(&googleDrive, "google-drive", false, "delete the Google Drive ZIP and checksum")
+	command.Flags().BoolVar(&all, "all", false, "remove every backup for this job from all enabled storage")
 	return command
 }
 

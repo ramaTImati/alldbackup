@@ -137,39 +137,7 @@ func (r *Rclone) Prune(ctx context.Context, job config.Job, now time.Time) error
 	return nil
 }
 
-func (r *Rclone) Delete(ctx context.Context, job config.Job, name string) error {
-	if !archive.IsBackupName(name) {
-		return fmt.Errorf("invalid backup filename %q", name)
-	}
-	remoteDir := r.jobRemoteDir(job)
-	callCtx, cancel := context.WithTimeout(ctx, mustDuration(r.Config.Timeout))
-	listing, err := r.Exec.Output(callCtx, "rclone", r.args("lsf", "--files-only", "--max-depth=1", remoteDir), nil)
-	cancel()
-	if err != nil {
-		return fmt.Errorf("list Google Drive backups: %w", err)
-	}
-	remoteFiles := make(map[string]bool)
-	for _, file := range strings.Split(listing, "\n") {
-		remoteFiles[strings.TrimSpace(file)] = true
-	}
-	if !remoteFiles[name] {
-		return fmt.Errorf("Google Drive backup %q not found", name)
-	}
-	for _, suffix := range []string{"", ".sha256"} {
-		if !remoteFiles[name+suffix] {
-			continue
-		}
-		callCtx, cancel := context.WithTimeout(ctx, mustDuration(r.Config.Timeout))
-		err := r.Exec.Run(callCtx, "rclone", r.args("deletefile", remoteDir+"/"+name+suffix), nil, io.Discard)
-		cancel()
-		if err != nil {
-			return fmt.Errorf("delete Google Drive backup %q: %w", name+suffix, err)
-		}
-	}
-	return nil
-}
-
-func (r *Rclone) DeleteAll(ctx context.Context, job config.Job) (int, error) {
+func (r *Rclone) CleanAll(ctx context.Context, job config.Job) (int, error) {
 	remoteDir := r.jobRemoteDir(job)
 	callCtx, cancel := context.WithTimeout(ctx, mustDuration(r.Config.Timeout))
 	listing, err := r.Exec.Output(callCtx, "rclone", r.args("lsf", "--files-only", "--max-depth=1", remoteDir), nil)
@@ -268,56 +236,7 @@ func PruneLocal(root string, job config.Job, days int, requireUploaded bool, now
 	return nil
 }
 
-func DeleteLocal(root string, job config.Job, name string) error {
-	if !archive.IsBackupName(name) {
-		return fmt.Errorf("invalid backup filename %q", name)
-	}
-	jobDir := JobDirectory(root, job)
-	jobInfo, err := os.Lstat(jobDir)
-	if errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("local backup %q not found", name)
-	}
-	if err != nil {
-		return err
-	}
-	if !jobInfo.IsDir() {
-		return fmt.Errorf("refusing to delete backups from non-directory job path %q", jobDir)
-	}
-	archivePath := filepath.Join(jobDir, name)
-	archiveInfo, err := os.Lstat(archivePath)
-	if errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("local backup %q not found", name)
-	}
-	if err != nil {
-		return err
-	}
-	if !archiveInfo.Mode().IsRegular() {
-		return fmt.Errorf("refusing to delete non-regular backup file %q", archivePath)
-	}
-	files := []string{archivePath}
-	for _, suffix := range []string{".sha256", ".uploaded"} {
-		file := archivePath + suffix
-		info, err := os.Lstat(file)
-		if errors.Is(err, os.ErrNotExist) {
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		if !info.Mode().IsRegular() {
-			return fmt.Errorf("refusing to delete non-regular backup file %q", file)
-		}
-		files = append(files, file)
-	}
-	for _, file := range files {
-		if err := os.Remove(file); err != nil {
-			return fmt.Errorf("delete local backup file %q: %w", file, err)
-		}
-	}
-	return nil
-}
-
-func DeleteLocalAll(root string, job config.Job) (int, error) {
+func CleanLocalAll(root string, job config.Job) (int, error) {
 	dir := JobDirectory(root, job)
 	info, err := os.Lstat(dir)
 	if errors.Is(err, os.ErrNotExist) {
@@ -343,11 +262,50 @@ func DeleteLocalAll(root string, job config.Job) (int, error) {
 		if !archive.IsBackupName(name) || entry.IsDir() {
 			continue
 		}
-		if err := DeleteLocal(root, job, name); err != nil {
-			failures = append(failures, fmt.Errorf("local backup %q: %w", name, err))
+		archivePath := filepath.Join(dir, name)
+		archiveInfo, err := os.Lstat(archivePath)
+		if err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				failures = append(failures, fmt.Errorf("inspect local backup %q: %w", name, err))
+			}
+			continue
+		}
+		if !archiveInfo.Mode().IsRegular() {
+			failures = append(failures, fmt.Errorf("refusing to clean non-regular backup file %q", archivePath))
+			continue
+		}
+		files := []string{archivePath}
+		for _, suffix := range []string{".sha256", ".uploaded"} {
+			file := archivePath + suffix
+			info, err := os.Lstat(file)
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			if err != nil {
+				failures = append(failures, fmt.Errorf("inspect local backup file %q: %w", name+suffix, err))
+				files = nil
+				break
+			}
+			if !info.Mode().IsRegular() {
+				failures = append(failures, fmt.Errorf("refusing to clean non-regular backup file %q", file))
+				files = nil
+				break
+			}
+			files = append(files, file)
+		}
+		if len(files) == 0 {
+			continue
+		}
+		if err := os.Remove(archivePath); err != nil {
+			failures = append(failures, fmt.Errorf("delete local backup %q: %w", name, err))
 			continue
 		}
 		deleted++
+		for _, file := range files[1:] {
+			if err := os.Remove(file); err != nil && !errors.Is(err, os.ErrNotExist) {
+				failures = append(failures, fmt.Errorf("delete local backup file %q: %w", filepath.Base(file), err))
+			}
+		}
 	}
 	return deleted, errors.Join(failures...)
 }

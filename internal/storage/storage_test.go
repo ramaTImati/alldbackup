@@ -97,8 +97,20 @@ func TestUploadCopiesAndVerifiesArchiveAndChecksum(t *testing.T) {
 	if got, want := exec.calls[0][len(exec.calls[0])-1], "gdrive:root/team/finance/backup.zip"; got != want {
 		t.Fatalf("uploaded archive remote path = %q, want %q", got, want)
 	}
+	if got, want := exec.calls[1][len(exec.calls[1])-1], "gdrive:root/team/finance"; got != want {
+		t.Fatalf("archive verification remote directory = %q, want %q", got, want)
+	}
+	if !strings.Contains(strings.Join(exec.calls[1], " "), "--include backup.zip") {
+		t.Fatalf("archive verification did not filter to backup.zip: %#v", exec.calls[1])
+	}
 	if got, want := exec.calls[2][len(exec.calls[2])-1], "gdrive:root/team/finance/backup.zip.sha256"; got != want {
 		t.Fatalf("uploaded checksum remote path = %q, want %q", got, want)
+	}
+	if got, want := exec.calls[3][len(exec.calls[3])-1], "gdrive:root/team/finance"; got != want {
+		t.Fatalf("checksum verification remote directory = %q, want %q", got, want)
+	}
+	if !strings.Contains(strings.Join(exec.calls[3], " "), "--include backup.zip.sha256") {
+		t.Fatalf("checksum verification did not filter to backup.zip.sha256: %#v", exec.calls[3])
 	}
 }
 

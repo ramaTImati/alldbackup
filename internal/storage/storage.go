@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -80,15 +81,18 @@ func (r *Rclone) copy(ctx context.Context, localPath, remote string) error {
 }
 
 func (r *Rclone) check(ctx context.Context, localPath, remote string) error {
+	name := filepath.Base(localPath)
+	localDir := filepath.Dir(localPath)
+	remoteDir := path.Dir(remote)
 	callCtx, cancel := context.WithTimeout(ctx, mustDuration(r.Config.Timeout))
-	err := r.Exec.Run(callCtx, "rclone", r.args("check", "--one-way", localPath, remote), nil, io.Discard)
+	err := r.Exec.Run(callCtx, "rclone", r.args("check", "--one-way", "--include", name, localDir, remoteDir), nil, io.Discard)
 	cancel()
 	if err == nil {
 		return nil
 	}
 	callCtx, cancel = context.WithTimeout(ctx, mustDuration(r.Config.Timeout))
 	defer cancel()
-	if cryptErr := r.Exec.Run(callCtx, "rclone", r.args("cryptcheck", localPath, remote), nil, io.Discard); cryptErr == nil {
+	if cryptErr := r.Exec.Run(callCtx, "rclone", r.args("cryptcheck", "--one-way", "--include", name, localDir, remoteDir), nil, io.Discard); cryptErr == nil {
 		return nil
 	} else {
 		return errors.Join(fmt.Errorf("rclone check: %w", err), fmt.Errorf("rclone cryptcheck: %w", cryptErr))

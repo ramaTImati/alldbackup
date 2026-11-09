@@ -26,6 +26,8 @@ type Runner struct {
 	Version  string
 }
 
+var ErrAlreadyRunning = errors.New("backup job is already running")
+
 func (r *Runner) Run(ctx context.Context, jobs []config.Job) error {
 	if r.Logger == nil {
 		r.Logger = slog.Default()
@@ -37,7 +39,11 @@ func (r *Runner) Run(ctx context.Context, jobs []config.Job) error {
 	var failures []error
 	for _, job := range jobs {
 		if err := r.runJob(ctx, job, secrets); err != nil {
-			failures = append(failures, fmt.Errorf("job %s: %s", job.Name, redact(err.Error(), job, secrets)))
+			failure := error(errors.New(redact(err.Error(), job, secrets)))
+			if errors.Is(err, ErrAlreadyRunning) {
+				failure = ErrAlreadyRunning
+			}
+			failures = append(failures, fmt.Errorf("job %s: %w", job.Name, failure))
 		}
 	}
 	return errors.Join(failures...)
@@ -82,7 +88,7 @@ func (r *Runner) runJob(ctx context.Context, job config.Job, secrets map[string]
 		return fmt.Errorf("acquire backup lock: %w", err)
 	}
 	if !locked {
-		return errors.New("backup job is already running")
+		return ErrAlreadyRunning
 	}
 	defer lock.Unlock()
 

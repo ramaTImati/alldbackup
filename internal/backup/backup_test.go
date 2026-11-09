@@ -40,8 +40,8 @@ func TestRunSkipsAJobThatIsAlreadyLocked(t *testing.T) {
 	c.SecretsFile = ""
 	c.Storage.Local.Path = root
 	runner := Runner{Config: c, Dumper: fakeDumper{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
-	err := runner.runJob(context.Background(), job, map[string]string{})
-	if err == nil || !strings.Contains(err.Error(), "already running") {
+	err := runner.Run(context.Background(), []config.Job{job})
+	if !errors.Is(err, ErrAlreadyRunning) || !strings.Contains(err.Error(), "already running") {
 		t.Fatalf("unexpected lock error: %v", err)
 	}
 }

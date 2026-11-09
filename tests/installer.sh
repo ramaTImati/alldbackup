@@ -82,6 +82,10 @@ grep -q 'retention_days: 7' "$config"
 printf '# keep this custom setting\n' >> "$config"
 old_backup="$DESTDIR/var/backups/alldbackup/old-job"
 mkdir -p "$old_backup" "$DESTDIR/var/backups/alldbackup/.locks"
+mkdir -p "$DESTDIR/var/backups/alldbackup/.scheduler"
+chmod 0700 "$DESTDIR/var/backups/alldbackup/.scheduler"
+printf '{"version":1}\n' > "$DESTDIR/var/backups/alldbackup/.scheduler/old-job.json"
+chmod 0600 "$DESTDIR/var/backups/alldbackup/.scheduler/old-job.json"
 printf 'archive' > "$old_backup/20261109T020000.123456789Z.zip"
 printf 'checksum' > "$old_backup/20261109T020000.123456789Z.zip.sha256"
 printf 'lock' > "$DESTDIR/var/backups/alldbackup/.locks/old-job.lock"
@@ -101,6 +105,8 @@ grep -q '# keep this custom setting' "$config"
 [[ "$(stat -c '%a' "$old_backup/20261109T020000.123456789Z.zip")" == 664 ]]
 [[ "$(stat -c '%a' "$DESTDIR/var/backups/alldbackup/.locks")" == 2770 ]]
 [[ "$(stat -c '%a' "$DESTDIR/var/backups/alldbackup/.locks/old-job.lock")" == 660 ]]
+[[ "$(stat -c '%a' "$DESTDIR/var/backups/alldbackup/.scheduler")" == 700 ]]
+[[ "$(stat -c '%a' "$DESTDIR/var/backups/alldbackup/.scheduler/old-job.json")" == 600 ]]
 
 cat > "$work/present-bin/rclone" <<'RCLONE'
 #!/bin/sh

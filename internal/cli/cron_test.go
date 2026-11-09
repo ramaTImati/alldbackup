@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"reflect"
 	"testing"
 	"time"
 
@@ -18,7 +17,7 @@ func TestRewriteCrontabInstallsIdempotentlyAndPreservesUnrelatedEntries(t *testi
 		t.Fatal(err)
 	}
 	want := "# other task\n0 4 * * * /usr/local/bin/cleanup\n" + cronBlockStart + "\n" +
-		"* * * * * '/usr/local/bin/alldbackup' --config '/etc/alldbackup/config.yaml' cron tick\n" + cronBlockEnd + "\n"
+		"*/15 * * * * '/usr/local/bin/alldbackup' --config '/etc/alldbackup/config.yaml' cron tick\n" + cronBlockEnd + "\n"
 	if got != want {
 		t.Fatalf("rewritten crontab = %q, want %q", got, want)
 	}
@@ -38,16 +37,17 @@ func TestRewriteCrontabRejectsMalformedManagedBlock(t *testing.T) {
 	}
 }
 
-func TestDueJobsMatchesOnlyTheCurrentServerMinute(t *testing.T) {
-	now := time.Date(2026, time.November, 9, 2, 30, 42, 0, time.FixedZone("server", 7*60*60))
-	jobs := []config.Job{
-		{Name: "matches", Schedule: "30 2 * * *"},
-		{Name: "other-minute", Schedule: "31 2 * * *"},
-		{Name: "invalid", Schedule: "hourly"},
+func TestDispatcherOnlyRunsAtQuarterHourSlots(t *testing.T) {
+	loc := time.FixedZone("server", 7*60*60)
+	for _, minute := range []int{0, 15, 30, 45} {
+		if !isQuarterHour(time.Date(2026, time.November, 9, 2, minute, 42, 0, loc)) {
+			t.Errorf("minute %d was not accepted", minute)
+		}
 	}
-	got := dueJobs(jobs, now)
-	if !reflect.DeepEqual(got, jobs[:1]) {
-		t.Fatalf("dueJobs() = %#v, want only %#v", got, jobs[:1])
+	for _, minute := range []int{1, 10, 14, 16, 29, 31, 59} {
+		if isQuarterHour(time.Date(2026, time.November, 9, 2, minute, 0, 0, loc)) {
+			t.Errorf("minute %d was accepted", minute)
+		}
 	}
 }
 

@@ -15,11 +15,11 @@ import (
 	"syscall"
 	"time"
 
-	cronlib "github.com/robfig/cron/v3"
 	"github.com/ramaTImati/alldbackup/internal/archive"
 	"github.com/ramaTImati/alldbackup/internal/backup"
 	"github.com/ramaTImati/alldbackup/internal/config"
 	"github.com/ramaTImati/alldbackup/internal/database"
+	"github.com/ramaTImati/alldbackup/internal/scheduler"
 	"github.com/ramaTImati/alldbackup/internal/storage"
 	"github.com/spf13/cobra"
 )
@@ -168,7 +168,7 @@ func configCommand(o *options) *cobra.Command {
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "NAME\tENABLED\tSCHEDULE\tGOOGLE_DRIVE_PATH\tDRIVER\tSOURCE\tDATABASE")
 			for _, job := range c.Jobs {
-				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%t\t%s\t%s\t%s\t%s\t%s\n", job.Name, job.Enabled, job.Schedule, job.GoogleDrivePath, job.Driver, job.Source, job.Database)
+				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%t\t%s\t%s\t%s\t%s\t%s\n", job.Name, job.Enabled, job.Schedule.String(), job.GoogleDrivePath, job.Driver, job.Source, job.Database)
 			}
 			return nil
 		}},
@@ -243,8 +243,23 @@ func addJobCommand(o *options) *cobra.Command {
 				}
 			}
 		}
-		if job.Schedule, err = prompt(reader, "Schedule (5-field cron)", config.DefaultJobSchedule); err != nil {
+		job.Schedule.Interval, err = prompt(reader, "Backup interval (whole hours or days, e.g. 1h, 1d, 7d)", config.DefaultJobInterval)
+		if err != nil {
 			return err
+		}
+		hourAt, err := prompt(reader, "Hour at (0-23, server local time)", "0")
+		if err != nil {
+			return err
+		}
+		if job.Schedule.HourAt, err = strconv.Atoi(hourAt); err != nil {
+			return fmt.Errorf("invalid schedule hour %q", hourAt)
+		}
+		minuteAt, err := prompt(reader, "Minute at (0, 15, 30, or 45)", "0")
+		if err != nil {
+			return err
+		}
+		if job.Schedule.MinuteAt, err = strconv.Atoi(minuteAt); err != nil {
+			return fmt.Errorf("invalid schedule minute %q", minuteAt)
 		}
 		if job.GoogleDrivePath, err = prompt(reader, "Google Drive path (relative to storage.google_drive.remote)", job.Name); err != nil {
 			return err
@@ -379,7 +394,7 @@ func cleanCommand(o *options) *cobra.Command {
 
 func cronCommand(o *options) *cobra.Command {
 	command := &cobra.Command{Use: "cron", Short: "Manage automatic scheduled backups"}
-	command.AddCommand(&cobra.Command{Use: "print", Short: "Print the one-minute schedule dispatcher entry", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
+	command.AddCommand(&cobra.Command{Use: "print", Short: "Print the 15-minute schedule dispatcher entry", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
 		binary, err := os.Executable()
 		if err != nil {
 			return fmt.Errorf("resolve alldbackup executable: %w", err)
@@ -399,7 +414,7 @@ func cronCommand(o *options) *cobra.Command {
 }
 
 func cronEntry(binary, configPath string) string {
-	return fmt.Sprintf("* * * * * %s --config %s cron tick", shellQuote(binary), shellQuote(configPath))
+	return fmt.Sprintf("*/15 * * * * %s --config %s cron tick", shellQuote(binary), shellQuote(configPath))
 }
 
 func shellQuote(value string) string {
@@ -410,7 +425,7 @@ const cronBlockStart = "# BEGIN ALLDBACKUP MANAGED"
 const cronBlockEnd = "# END ALLDBACKUP MANAGED"
 
 func cronInstallCommand(o *options) *cobra.Command {
-	return &cobra.Command{Use: "install", Short: "Install the minute dispatcher in this account's crontab", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
+	return &cobra.Command{Use: "install", Short: "Install the 15-minute dispatcher in this account's crontab", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
 		binary, err := os.Executable()
 		if err != nil {
 			return fmt.Errorf("resolve alldbackup executable: %w", err)
@@ -528,7 +543,11 @@ func legacyCronEntry(line, binary, configPath string) bool {
 }
 
 func cronTickCommand(o *options) *cobra.Command {
-	return &cobra.Command{Use: "tick", Short: "Run jobs whose configured schedule matches this minute", Hidden: true, Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
+	return &cobra.Command{Use: "tick", Short: "Run jobs due on this 15-minute tick", Hidden: true, Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
+		now := time.Now()
+		if !isQuarterHour(now) {
+			return nil
+		}
 		if _, err := os.Stat(o.configPath); errors.Is(err, os.ErrNotExist) {
 			return nil
 		} else if err != nil {
@@ -541,33 +560,58 @@ func cronTickCommand(o *options) *cobra.Command {
 		for _, jobErr := range jobErrors {
 			o.logger.Error("skipping invalid scheduled job", "error", jobErr)
 		}
-		jobs := dueJobs(c.EnabledJobs(), time.Now())
+		jobs := c.EnabledJobs()
 		if len(jobs) == 0 {
 			return nil
 		}
+		store := scheduler.New(c.Storage.Local.Path)
+		unlock, locked, err := store.TryLock()
+		if err != nil {
+			return err
+		}
+		if !locked {
+			return nil
+		}
+		defer unlock()
 		ctx, cancel := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 		defer cancel()
 		drive := storage.NewRclone(c.Storage.GoogleDrive)
 		runner := backup.Runner{Config: c, Dumper: database.New(), Uploader: drive, Logger: o.logger, Version: Version}
-		return runner.Run(ctx, jobs)
+		var failures []error
+		for _, job := range jobs {
+			attempt, due, err := store.Begin(job, now)
+			if err != nil {
+				failures = append(failures, fmt.Errorf("job %s scheduler state: %w", job.Name, err))
+				continue
+			}
+			if !due {
+				continue
+			}
+			err = runner.Run(ctx, []config.Job{job})
+			if errors.Is(err, backup.ErrAlreadyRunning) {
+				if stateErr := store.Abandon(job, attempt); stateErr != nil {
+					failures = append(failures, fmt.Errorf("job %s scheduler state: %w", job.Name, stateErr))
+				}
+				continue
+			}
+			if err != nil {
+				o.logger.Error("scheduled backup attempt failed", "job", job.Name, "attempt", attempt.Number, "error", err)
+				if stateErr := store.Fail(job, attempt); stateErr != nil {
+					failures = append(failures, fmt.Errorf("job %s scheduler state: %w", job.Name, stateErr))
+				}
+				failures = append(failures, err)
+				continue
+			}
+			if err := store.Succeed(job, attempt); err != nil {
+				failures = append(failures, fmt.Errorf("job %s scheduler state: %w", job.Name, err))
+			}
+		}
+		return errors.Join(failures...)
 	}}
 }
 
-func dueJobs(jobs []config.Job, now time.Time) []config.Job {
-	parser := cronlib.NewParser(cronlib.Minute | cronlib.Hour | cronlib.Dom | cronlib.Month | cronlib.Dow)
-	minute := now.Truncate(time.Minute)
-	previousMinute := minute.Add(-time.Minute)
-	var due []config.Job
-	for _, job := range jobs {
-		schedule, err := parser.Parse(job.Schedule)
-		if err != nil {
-			continue
-		}
-		if schedule.Next(previousMinute).Equal(minute) {
-			due = append(due, job)
-		}
-	}
-	return due
+func isQuarterHour(now time.Time) bool {
+	return now.Minute()%15 == 0
 }
 
 func doctorCommand(o *options) *cobra.Command {

@@ -1,4 +1,4 @@
-version: 1
+version: 2
 timestamp_timezone: "+07:00"
 secrets_file: /etc/alldbackup/secrets.env
 
@@ -18,7 +18,10 @@ storage:
 jobs:
   - name: mysql-host
     enabled: true
-    schedule: "0 2 * * *"
+    schedule:
+      interval: 1d
+      hour_at: 2
+      minute_at: 0
     google_drive_path: mysql-host
     driver: mysql
     source: host
@@ -30,7 +33,10 @@ jobs:
 
   - name: mariadb-docker
     enabled: true
-    schedule: "30 2 * * *"
+    schedule:
+      interval: 1d
+      hour_at: 2
+      minute_at: 15
     google_drive_path: applications/mariadb
     driver: mariadb
     source: docker
@@ -41,7 +47,10 @@ jobs:
 
   - name: postgres-docker
     enabled: true
-    schedule: "0 3 * * *"
+    schedule:
+      interval: 1d
+      hour_at: 3
+      minute_at: 0
     google_drive_path: databases/postgres
     driver: postgres
     source: docker
@@ -52,7 +61,10 @@ jobs:
 
   - name: sqlite-host
     enabled: true
-    schedule: "30 3 * * *"
+    schedule:
+      interval: 1d
+      hour_at: 3
+      minute_at: 15
     google_drive_path: files/sqlite-host
     driver: sqlite
     source: host

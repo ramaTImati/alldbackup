@@ -101,7 +101,7 @@ done
 
 if [[ ! -e "$etc_dir/config.yaml" ]]; then
   cat > "$etc_dir/config.yaml" <<'CONFIG'
-version: 1
+version: 2
 timestamp_timezone: UTC
 secrets_file: /etc/alldbackup/secrets.env
 storage:
@@ -139,10 +139,10 @@ else
 fi
 
 if (( ! staged )); then
-  find "$backup_dir" -xdev -type d ! -path "$backup_dir/.locks" -exec chgrp alldbackup {} +
+  find "$backup_dir" -xdev -path "$backup_dir/.scheduler" -prune -o -type d ! -path "$backup_dir/.locks" -exec chgrp alldbackup {} +
   find "$backup_dir" -xdev -type f \( -name '*.zip' -o -name '*.zip.sha256' \) -exec chgrp alldbackup {} +
 fi
-find "$backup_dir" -xdev -type d ! -path "$backup_dir/.locks" -exec chmod 2775 {} +
+find "$backup_dir" -xdev -path "$backup_dir/.scheduler" -prune -o -type d ! -path "$backup_dir/.locks" -exec chmod 2775 {} +
 find "$backup_dir" -xdev -type f \( -name '*.zip' -o -name '*.zip.sha256' \) -exec chmod 0664 {} +
 if [[ -e "$backup_dir/.locks" || -L "$backup_dir/.locks" ]]; then
   [[ -d "$backup_dir/.locks" && ! -L "$backup_dir/.locks" ]] || die "Refusing to use invalid lock directory: $backup_dir/.locks"

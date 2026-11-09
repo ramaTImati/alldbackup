@@ -28,8 +28,8 @@ func TestDefaultsForAndRoundTrip(t *testing.T) {
 	if loaded.Storage.GoogleDrive.ConfigFile != filepath.Join(filepath.Dir(path), "rclone.conf") {
 		t.Fatalf("Rclone config path = %q, want config directory path", loaded.Storage.GoogleDrive.ConfigFile)
 	}
-	if loaded.Jobs[0].Schedule != DefaultJobSchedule {
-		t.Fatalf("missing schedule = %q, want default %q", loaded.Jobs[0].Schedule, DefaultJobSchedule)
+	if loaded.Jobs[0].Schedule != DefaultSchedule() {
+		t.Fatalf("missing schedule = %#v, want default %#v", loaded.Jobs[0].Schedule, DefaultSchedule())
 	}
 	if loaded.Jobs[0].GoogleDrivePath != "db1" {
 		t.Fatalf("missing Google Drive path = %q, want job name db1", loaded.Jobs[0].GoogleDrivePath)
@@ -49,7 +49,7 @@ func TestValidateRejectsTraversalDuplicateAndMissingFields(t *testing.T) {
 	if err := c.Validate(); err == nil {
 		t.Fatal("accepted duplicate job names")
 	}
-	c.Jobs = []Job{{Name: "db", Enabled: true, Schedule: DefaultJobSchedule, GoogleDrivePath: "team/db", Driver: "postgres", Source: "host", Database: "app", Username: "backup", PasswordEnv: "DB_PASS", Host: "localhost", Port: 5432}}
+	c.Jobs = []Job{{Name: "db", Enabled: true, Schedule: DefaultSchedule(), GoogleDrivePath: "team/db", Driver: "postgres", Source: "host", Database: "app", Username: "backup", PasswordEnv: "DB_PASS", Host: "localhost", Port: 5432}}
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -61,20 +61,35 @@ func TestValidateRejectsTraversalDuplicateAndMissingFields(t *testing.T) {
 
 func TestScheduleValidation(t *testing.T) {
 	c := Defaults()
-	job := Job{Name: "db", Enabled: true, Driver: "sqlite", Source: "host", File: "/tmp/db.sqlite", Schedule: "*/15 1-5 * * 1-5", GoogleDrivePath: "team/db"}
+	job := Job{Name: "db", Enabled: true, Driver: "sqlite", Source: "host", File: "/tmp/db.sqlite", Schedule: Schedule{Interval: "7d", HourAt: 20, MinuteAt: 30}, GoogleDrivePath: "team/db"}
 	c.Jobs = []Job{job}
 	if err := c.Validate(); err != nil {
 		t.Fatalf("valid schedule rejected: %v", err)
 	}
-
-	for _, schedule := range []string{"hourly", "60 2 * * *", "0 2 * *"} {
-		c.Jobs[0].Schedule = schedule
-		if err := c.Validate(); err == nil {
-			t.Errorf("accepted invalid schedule %q", schedule)
+	for _, interval := range []string{"1h", "2h", "1d", "3d", "7d"} {
+		c.Jobs[0].Schedule.Interval = interval
+		if err := c.Validate(); err != nil {
+			t.Errorf("valid interval %q rejected: %v", interval, err)
 		}
 	}
 
-	c.Jobs[0].Schedule = ""
+	for _, schedule := range []Schedule{
+		{Interval: "30m", HourAt: 2, MinuteAt: 0},
+		{Interval: "0h", HourAt: 2, MinuteAt: 0},
+		{Interval: "*/15 * * * *", HourAt: 2, MinuteAt: 0},
+		{Interval: "1h", HourAt: 24, MinuteAt: 0},
+		{Interval: "1h", HourAt: 2, MinuteAt: 10},
+		{Interval: "1.5h", HourAt: 2, MinuteAt: 15},
+		{Interval: "01h", HourAt: 2, MinuteAt: 15},
+		{Interval: "+1h", HourAt: 2, MinuteAt: 15},
+	} {
+		c.Jobs[0].Schedule = schedule
+		if err := c.Validate(); err == nil {
+			t.Errorf("accepted invalid schedule %#v", schedule)
+		}
+	}
+
+	c.Jobs[0].Schedule = Schedule{}
 	if err := c.Validate(); err == nil {
 		t.Fatal("accepted empty schedule before defaults are applied")
 	}
@@ -82,7 +97,7 @@ func TestScheduleValidation(t *testing.T) {
 
 func TestLoadDefaultsMissingJobScheduleToMidnight(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	data := []byte("version: 1\njobs:\n  - name: sqlite\n    enabled: true\n    driver: sqlite\n    source: host\n    file: /tmp/db.sqlite\n")
+	data := []byte("version: 2\njobs:\n  - name: sqlite\n    enabled: true\n    driver: sqlite\n    source: host\n    file: /tmp/db.sqlite\n")
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -90,8 +105,8 @@ func TestLoadDefaultsMissingJobScheduleToMidnight(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := c.Jobs[0].Schedule; got != DefaultJobSchedule {
-		t.Fatalf("missing schedule = %q, want %q", got, DefaultJobSchedule)
+	if got := c.Jobs[0].Schedule; got != DefaultSchedule() {
+		t.Fatalf("missing schedule = %#v, want %#v", got, DefaultSchedule())
 	}
 	if got := c.Jobs[0].GoogleDrivePath; got != "sqlite" {
 		t.Fatalf("missing Google Drive path = %q, want job name sqlite", got)
@@ -99,6 +114,33 @@ func TestLoadDefaultsMissingJobScheduleToMidnight(t *testing.T) {
 	wantRcloneConfig := filepath.Join(filepath.Dir(path), "rclone.conf")
 	if got := c.Storage.GoogleDrive.ConfigFile; got != wantRcloneConfig {
 		t.Fatalf("default Rclone config path = %q, want %q", got, wantRcloneConfig)
+	}
+}
+
+func TestLoadScheduleMapping(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	data := []byte("version: 2\njobs:\n  - name: sqlite\n    enabled: true\n    schedule:\n      interval: 3d\n      hour_at: 20\n      minute_at: 30\n    driver: sqlite\n    source: host\n    file: /tmp/db.sqlite\n")
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := Schedule{Interval: "3d", HourAt: 20, MinuteAt: 30}
+	if got := c.Jobs[0].Schedule; got != want {
+		t.Fatalf("loaded schedule = %#v, want %#v", got, want)
+	}
+}
+
+func TestLoadRejectsLegacyCronSchedule(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	data := []byte("version: 1\njobs:\n  - name: sqlite\n    enabled: true\n    schedule: \"0 2 * * *\"\n    driver: sqlite\n    source: host\n    file: /tmp/db.sqlite\n")
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(path); err == nil || !strings.Contains(err.Error(), "cron expressions are no longer supported") {
+		t.Fatalf("Load() error = %v, want legacy schedule migration guidance", err)
 	}
 }
 
@@ -122,7 +164,7 @@ func TestAddJobDefaultsGoogleDrivePathToJobName(t *testing.T) {
 
 func TestGoogleDrivePathValidation(t *testing.T) {
 	c := Defaults()
-	c.Jobs = []Job{{Name: "db", Enabled: true, Schedule: DefaultJobSchedule, Driver: "sqlite", Source: "host", File: "/tmp/db.sqlite", GoogleDrivePath: "team/databases/db"}}
+	c.Jobs = []Job{{Name: "db", Enabled: true, Schedule: DefaultSchedule(), Driver: "sqlite", Source: "host", File: "/tmp/db.sqlite", GoogleDrivePath: "team/databases/db"}}
 	if err := c.Validate(); err != nil {
 		t.Fatalf("valid relative path rejected: %v", err)
 	}
@@ -133,8 +175,8 @@ func TestGoogleDrivePathValidation(t *testing.T) {
 		}
 	}
 	c.Jobs = []Job{
-		{Name: "db1", Enabled: true, Schedule: DefaultJobSchedule, Driver: "sqlite", Source: "host", File: "/tmp/db1.sqlite", GoogleDrivePath: "team/db"},
-		{Name: "db2", Enabled: true, Schedule: DefaultJobSchedule, Driver: "sqlite", Source: "host", File: "/tmp/db2.sqlite", GoogleDrivePath: "team/db"},
+		{Name: "db1", Enabled: true, Schedule: DefaultSchedule(), Driver: "sqlite", Source: "host", File: "/tmp/db1.sqlite", GoogleDrivePath: "team/db"},
+		{Name: "db2", Enabled: true, Schedule: DefaultSchedule(), Driver: "sqlite", Source: "host", File: "/tmp/db2.sqlite", GoogleDrivePath: "team/db"},
 	}
 	if err := c.Validate(); err == nil {
 		t.Fatal("accepted duplicate Google Drive paths")
@@ -143,7 +185,7 @@ func TestGoogleDrivePathValidation(t *testing.T) {
 
 func TestLoadResolvesRelativeRcloneConfigPath(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	data := []byte("version: 1\nstorage:\n  google_drive:\n    config_file: auth/rclone.conf\n")
+	data := []byte("version: 2\nstorage:\n  google_drive:\n    config_file: auth/rclone.conf\n")
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +223,7 @@ func TestTimestampTimezoneAcceptsFixedOffsetsAndRejectsInvalidValues(t *testing.
 
 func TestLoadRejectsUnknownYAMLField(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	if err := os.WriteFile(path, []byte("version: 1\nstorage:\n  unknown: true\n"), 0600); err != nil {
+	if err := os.WriteFile(path, []byte("version: 2\nstorage:\n  unknown: true\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Load(path); err == nil {
@@ -191,7 +233,7 @@ func TestLoadRejectsUnknownYAMLField(t *testing.T) {
 
 func TestLoadScheduledSkipsInvalidJobsAndRejectsInvalidSharedConfig(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	data := `version: 1
+	data := `version: 2
 jobs:
   - name: good
     enabled: true
@@ -218,7 +260,7 @@ jobs:
 		t.Fatalf("scheduled jobs = %#v, errors = %#v", c.Jobs, jobErrors)
 	}
 
-	if err := os.WriteFile(path, []byte("version: 1\nstorage:\n  local:\n    retention_days: -1\n"), 0600); err != nil {
+	if err := os.WriteFile(path, []byte("version: 2\nstorage:\n  local:\n    retention_days: -1\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := LoadScheduled(path); err == nil {
@@ -234,7 +276,7 @@ jobs:
 
 func TestLoadScheduledAcceptsConfigWithoutJobs(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	if err := os.WriteFile(path, []byte("version: 1\n"), 0600); err != nil {
+	if err := os.WriteFile(path, []byte("version: 2\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	c, jobErrors, err := LoadScheduled(path)
@@ -245,7 +287,7 @@ func TestLoadScheduledAcceptsConfigWithoutJobs(t *testing.T) {
 
 func TestLoadScheduledSkipsAllValidJobsWithDuplicateDrivePaths(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	data := `version: 1
+	data := `version: 2
 jobs:
   - name: one
     enabled: true
@@ -274,7 +316,7 @@ jobs:
 
 func TestLoadScheduledSkipsDuplicateEnabledNames(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	data := `version: 1
+	data := `version: 2
 jobs:
   - name: duplicate
     enabled: true

@@ -15,7 +15,7 @@ Use `sudo nano /etc/alldbackup/secrets.env` for database passwords; that file is
 ## Example YAML
 
 ```yaml
-version: 1
+version: 2
 timestamp_timezone: "+07:00"
 secrets_file: /etc/alldbackup/secrets.env
 
@@ -35,7 +35,10 @@ storage:
 jobs:
   - name: production
     enabled: true
-    schedule: "0 2 * * *"
+    schedule:
+      interval: 1d
+      hour_at: 2
+      minute_at: 0
     google_drive_path: departments/production
     driver: mysql
     source: host
@@ -52,7 +55,9 @@ Every job needs a unique safe name, `enabled`, `driver`, `source`, and driver-sp
 
 | Setting | Required | Meaning |
 | --- | --- | --- |
-| `schedule` | No | Five-field cron expression. Missing or blank means `0 0 * * *` (midnight in server-local time). |
+| `schedule.interval` | No | Whole hours (`1h`, `2h`) or calendar days (`1d`, `3d`, `7d`); minimum `1h`. |
+| `schedule.hour_at` | No | Server-local hour, from `0` to `23`; default `0`. |
+| `schedule.minute_at` | No | One of `0`, `15`, `30`, or `45`; default `0`. |
 | `google_drive_path` | No | Relative path under the configured Rclone remote; defaults to the job name. Use a unique path for each job. |
 | `driver` | Yes | `mysql`, `mariadb`, `postgres`, or `sqlite`. |
 | `source` | Yes | `host` or `docker`. |
@@ -61,7 +66,20 @@ Every job needs a unique safe name, `enabled`, `driver`, `source`, and driver-sp
 | `database`, `username`, `password_env` | For MySQL/MariaDB/PostgreSQL | Database name, backup account, and password variable name. |
 | `file` | For SQLite | SQLite file path; for Docker, this path is inside the container. |
 
-The automatic cron dispatcher checks the YAML every minute and runs enabled, valid jobs that match `schedule`. Cron runs on the server's local timezone. See [cron scheduling](cron.md). Manual `alldbackup run --job NAME` and `alldbackup run --all` run immediately.
+The root cron dispatcher checks the YAML every 15 minutes. A job without `schedule` defaults to every day at `00:00`; explicit intervals run at the configured local time. See [cron scheduling](cron.md). Manual `alldbackup run --job NAME` and `alldbackup run --all` run immediately without changing the automatic schedule.
+
+### Update a version 1 configuration
+
+Back up `/etc/alldbackup/config.yaml`, change `version: 1` to `version: 2`, and replace each cron string with an interval schedule. For example, change `schedule: "0 2 * * *"` to:
+
+```yaml
+schedule:
+  interval: 1d
+  hour_at: 2
+  minute_at: 0
+```
+
+There is no automatic migration command. Validate the edited file with `alldbackup config validate` before relying on scheduled backups.
 
 For Docker jobs, Docker CLI must be installed on the host and the account must have Docker daemon access. The selected container must contain the dump utility. Docker daemon access is effectively host-root access.
 

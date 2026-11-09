@@ -22,7 +22,10 @@ Edit `/etc/alldbackup/config.yaml` as the regular alldbackup account:
 jobs:
   - name: production-db
     enabled: true
-    schedule: "0 2 * * *"
+    schedule:
+      interval: 1d
+      hour_at: 2
+      minute_at: 0
     google_drive_path: production/postgres
     driver: postgres
     source: docker

@@ -6,7 +6,7 @@
 
 ## Install
 
-The installer supports Ubuntu and Debian. It verifies the release checksum, installs Rclone if missing, creates the `alldbackup` group and default config files, prepares the backup directory, installs/enables cron if needed, and registers one root crontab entry that checks schedules every minute.
+The installer supports Ubuntu and Debian. It verifies the release checksum, installs Rclone if missing, creates the `alldbackup` group and default config files, prepares the backup directory, installs/enables cron if needed, and registers one root crontab entry that checks schedules every 15 minutes.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ramaTImati/alldbackup/main/scripts/install.sh -o /tmp/alldbackup-install.sh
@@ -25,7 +25,7 @@ alldbackup config add
 # or: nano /etc/alldbackup/config.yaml
 ```
 
-Each job has its own five-field cron schedule. An omitted schedule defaults to `0 0 * * *` (midnight in the server's local timezone). The dispatcher reads the YAML each minute, so edits take effect without editing crontab or restarting a service. See [configuration](docs/configuration.md) and [`configs/config.example.yaml`](configs/config.example.yaml).
+Each job uses a simple interval such as `1h`, `1d`, or `7d`, plus `hour_at` and `minute_at`. The default is daily at 00:00 in the server's local timezone. Minutes are limited to `0`, `15`, `30`, or `45`; the root dispatcher checks jobs every 15 minutes. See [configuration](docs/configuration.md) and [`configs/config.example.yaml`](configs/config.example.yaml).
 
 For SQL database passwords, set `password_env` to a variable name, then add that `KEY=value` to the protected secrets file:
 
@@ -84,7 +84,7 @@ alldbackup verify --file /var/backups/alldbackup/production/20261109T020000.1234
 | Database secrets | `/etc/alldbackup/secrets.env` | root-owned, mode `0640`; root and `alldbackup` group can read |
 | Rclone credentials | `/etc/alldbackup/rclone.conf` | mode `0600`; owned by installer account |
 | Local backups | `/var/backups/alldbackup/<job>/` | all local users can read; `alldbackup` group can write/delete |
-| Cron | root's crontab | one managed dispatcher entry; checks each minute |
+| Cron | root's crontab | one managed dispatcher entry; checks every 15 minutes |
 
 The installer keeps these files and backups when upgrading. Backup ZIP contents are readable by every local user, so treat this host's account access accordingly. Docker jobs require access to the Docker daemon, which is effectively host-root access.
 
@@ -134,7 +134,7 @@ MIT. See [`LICENSE`](LICENSE).
 
 ### Instalasi
 
-Installer mendukung Ubuntu dan Debian. Installer memeriksa checksum rilis, memasang Rclone jika belum tersedia, membuat grup `alldbackup` dan konfigurasi awal, menyiapkan folder backup, memasang/mengaktifkan cron bila diperlukan, serta membuat satu entri crontab root yang memeriksa jadwal setiap menit.
+Installer mendukung Ubuntu dan Debian. Installer memeriksa checksum rilis, memasang Rclone jika belum tersedia, membuat grup `alldbackup` dan konfigurasi awal, menyiapkan folder backup, memasang/mengaktifkan cron bila diperlukan, serta membuat satu entri crontab root yang memeriksa jadwal setiap 15 menit.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ramaTImati/alldbackup/main/scripts/install.sh -o /tmp/alldbackup-install.sh
@@ -153,7 +153,7 @@ alldbackup config add
 # atau: nano /etc/alldbackup/config.yaml
 ```
 
-Setiap job memiliki jadwal cron lima kolom. Jika schedule kosong atau tidak ada, default-nya `0 0 * * *` (pukul 00:00 menurut zona waktu server). Dispatcher membaca ulang YAML setiap menit, sehingga perubahan langsung berlaku tanpa mengubah crontab atau me-restart service. Lihat [panduan konfigurasi](docs/configuration.md) dan [`configs/config.example.yaml`](configs/config.example.yaml).
+Setiap job memakai interval sederhana seperti `1h`, `1d`, atau `7d`, ditambah `hour_at` dan `minute_at`. Default-nya setiap hari pukul 00:00 menurut waktu server. Nilai menit hanya `0`, `15`, `30`, atau `45`; dispatcher root memeriksa job setiap 15 menit. Lihat [panduan konfigurasi](docs/configuration.md) dan [`configs/config.example.yaml`](configs/config.example.yaml).
 
 Untuk password basis data SQL, isi `password_env` dengan nama variabel, lalu tambahkan pasangan `KEY=value` ke file secrets:
 
@@ -212,7 +212,7 @@ alldbackup verify --file /var/backups/alldbackup/production/20261109T020000.1234
 | Password database | `/etc/alldbackup/secrets.env` | milik root, mode `0640`; root dan grup `alldbackup` dapat membaca |
 | Kredensial Rclone | `/etc/alldbackup/rclone.conf` | mode `0600`; milik akun installer |
 | Backup lokal | `/var/backups/alldbackup/<job>/` | semua user lokal dapat membaca; grup `alldbackup` dapat menulis/menghapus |
-| Cron | crontab root | satu entri dispatcher; memeriksa setiap menit |
+| Cron | crontab root | satu entri dispatcher; memeriksa setiap 15 menit |
 
 Upgrade mempertahankan seluruh konfigurasi dan backup. Isi ZIP dapat dibaca semua user lokal, jadi perhatikan akun yang memiliki akses ke server. Job Docker memerlukan akses Docker daemon yang setara dengan akses root host.
 

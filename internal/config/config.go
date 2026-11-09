@@ -7,15 +7,16 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/robfig/cron/v3"
 	"go.yaml.in/yaml/v3"
 )
 
 const DefaultPath = "/etc/alldbackup/config.yaml"
-const DefaultJobSchedule = "0 0 * * *"
+const DefaultJobInterval = "1d"
+const maxScheduleDays = 36500
 
 var jobNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,62}$`)
 var envNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -51,24 +52,119 @@ type DriveConfig struct {
 }
 
 type Job struct {
-	Name            string `yaml:"name"`
-	Enabled         bool   `yaml:"enabled"`
-	Schedule        string `yaml:"schedule,omitempty"`
-	GoogleDrivePath string `yaml:"google_drive_path,omitempty"`
-	Driver          string `yaml:"driver"`
-	Source          string `yaml:"source"`
-	Host            string `yaml:"host,omitempty"`
-	Port            int    `yaml:"port,omitempty"`
-	Container       string `yaml:"container,omitempty"`
-	Database        string `yaml:"database,omitempty"`
-	Username        string `yaml:"username,omitempty"`
-	PasswordEnv     string `yaml:"password_env,omitempty"`
-	File            string `yaml:"file,omitempty"`
+	Name            string   `yaml:"name"`
+	Enabled         bool     `yaml:"enabled"`
+	Schedule        Schedule `yaml:"schedule,omitempty"`
+	GoogleDrivePath string   `yaml:"google_drive_path,omitempty"`
+	Driver          string   `yaml:"driver"`
+	Source          string   `yaml:"source"`
+	Host            string   `yaml:"host,omitempty"`
+	Port            int      `yaml:"port,omitempty"`
+	Container       string   `yaml:"container,omitempty"`
+	Database        string   `yaml:"database,omitempty"`
+	Username        string   `yaml:"username,omitempty"`
+	PasswordEnv     string   `yaml:"password_env,omitempty"`
+	File            string   `yaml:"file,omitempty"`
+}
+
+type Schedule struct {
+	Interval string `yaml:"interval"`
+	HourAt   int    `yaml:"hour_at"`
+	MinuteAt int    `yaml:"minute_at"`
+}
+
+func (s *Schedule) UnmarshalYAML(node *yaml.Node) error {
+	if node.Tag == "!!null" {
+		return nil
+	}
+	if node.Kind != yaml.MappingNode {
+		return errors.New("schedule must be a mapping with interval, hour_at, and minute_at fields; cron expressions are no longer supported")
+	}
+	for i := 0; i < len(node.Content); i += 2 {
+		key := node.Content[i].Value
+		if key != "interval" && key != "hour_at" && key != "minute_at" {
+			return fmt.Errorf("unknown schedule field %q", key)
+		}
+	}
+	type scheduleAlias Schedule
+	var decoded scheduleAlias
+	if err := node.Decode(&decoded); err != nil {
+		return err
+	}
+	*s = Schedule(decoded)
+	return nil
+}
+
+func DefaultSchedule() Schedule {
+	return Schedule{Interval: DefaultJobInterval, HourAt: 0, MinuteAt: 0}
+}
+
+func (s Schedule) Validate() error {
+	amount, unit, err := parseInterval(s.Interval)
+	if err != nil {
+		return err
+	}
+	if (unit == "d" && amount > maxScheduleDays) || (unit == "h" && amount > maxScheduleDays*24) {
+		return fmt.Errorf("interval cannot exceed %d days", maxScheduleDays)
+	}
+	if s.HourAt < 0 || s.HourAt > 23 {
+		return errors.New("hour_at must be between 0 and 23")
+	}
+	switch s.MinuteAt {
+	case 0, 15, 30, 45:
+		return nil
+	default:
+		return errors.New("minute_at must be 0, 15, 30, or 45")
+	}
+}
+
+func (s Schedule) String() string {
+	return fmt.Sprintf("every %s at %02d:%02d", s.Interval, s.HourAt, s.MinuteAt)
+}
+
+func (s Schedule) FirstSlot(now time.Time) time.Time {
+	slot := time.Date(now.Year(), now.Month(), now.Day(), s.HourAt, s.MinuteAt, 0, 0, now.Location())
+	if slot.Equal(now.Truncate(time.Minute)) || slot.After(now) {
+		return slot
+	}
+	return slot.AddDate(0, 0, 1)
+}
+
+func (s Schedule) AddInterval(from time.Time) time.Time {
+	amount, unit, _ := parseInterval(s.Interval)
+	if unit == "d" {
+		return from.AddDate(0, 0, amount)
+	}
+	return from.Add(time.Duration(amount) * time.Hour)
+}
+
+func parseInterval(value string) (int, string, error) {
+	if len(value) < 2 {
+		return 0, "", errors.New("interval must be a whole number of hours or days, such as 1h or 7d")
+	}
+	unit := value[len(value)-1:]
+	if unit != "h" && unit != "d" {
+		return 0, "", errors.New("interval must use whole hours or days, such as 1h or 7d")
+	}
+	digits := value[:len(value)-1]
+	if len(digits) > 1 && digits[0] == '0' {
+		return 0, "", errors.New("interval must use a number without leading zeros, such as 1h or 7d")
+	}
+	for _, digit := range digits {
+		if digit < '0' || digit > '9' {
+			return 0, "", errors.New("interval must be a positive whole number of hours or days, such as 1h or 7d")
+		}
+	}
+	amount, err := strconv.Atoi(digits)
+	if err != nil || amount < 1 {
+		return 0, "", errors.New("interval must be a positive whole number of hours or days, such as 1h or 7d")
+	}
+	return amount, unit, nil
 }
 
 func Defaults() Config {
 	return Config{
-		Version:           1,
+		Version:           2,
 		TimestampTimezone: "UTC",
 		SecretsFile:       "/etc/alldbackup/secrets.env",
 		Storage: StorageConfig{
@@ -181,8 +277,8 @@ func read(path string) (Config, error) {
 }
 
 func (c Config) Validate() error {
-	if c.Version != 1 {
-		return fmt.Errorf("unsupported configuration version %d (expected 1)", c.Version)
+	if c.Version != 2 {
+		return fmt.Errorf("unsupported configuration version %d (expected 2); update the YAML version and replace cron schedule strings with interval, hour_at, and minute_at", c.Version)
 	}
 	if _, err := c.TimestampLocation(); err != nil {
 		return fmt.Errorf("timestamp_timezone: %w", err)
@@ -228,12 +324,8 @@ func (c Config) Validate() error {
 			return fmt.Errorf("duplicate job name %q", j.Name)
 		}
 		seen[j.Name] = true
-		if strings.TrimSpace(j.Schedule) == "" {
-			return fmt.Errorf("%s.schedule is required (default: %s)", prefix, DefaultJobSchedule)
-		}
-		parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
-		if _, err := parser.Parse(j.Schedule); err != nil {
-			return fmt.Errorf("%s.schedule must be a valid five-field cron expression: %w", prefix, err)
+		if err := j.Schedule.Validate(); err != nil {
+			return fmt.Errorf("%s.schedule: %w", prefix, err)
 		}
 		if !validGoogleDrivePath(j.GoogleDrivePath) {
 			return fmt.Errorf("%s.google_drive_path must be a relative path without empty, . or .. segments", prefix)
@@ -387,8 +479,8 @@ func AddJob(path string, job Job) error {
 
 func (c *Config) applyJobDefaults() {
 	for i := range c.Jobs {
-		if strings.TrimSpace(c.Jobs[i].Schedule) == "" {
-			c.Jobs[i].Schedule = DefaultJobSchedule
+		if strings.TrimSpace(c.Jobs[i].Schedule.Interval) == "" {
+			c.Jobs[i].Schedule.Interval = DefaultJobInterval
 		}
 		if strings.TrimSpace(c.Jobs[i].GoogleDrivePath) == "" {
 			c.Jobs[i].GoogleDrivePath = c.Jobs[i].Name

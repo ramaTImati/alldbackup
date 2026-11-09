@@ -1,6 +1,6 @@
 # Installation, permissions, update, and uninstall
 
-The installer supports Ubuntu and Debian. Installation and upgrade are system-wide and require `sudo`; after the first login refresh, normal job configuration and backup commands run as your regular account. Cron runs as root and dispatches due jobs every minute.
+The installer supports Ubuntu and Debian. Installation and upgrade are system-wide and require `sudo`; after the first login refresh, normal job configuration and backup commands run as your regular account. Cron runs as root and dispatches due jobs every 15 minutes.
 
 ## 1. Install
 
@@ -29,7 +29,7 @@ The installer creates an empty default YAML config and credentials files; it doe
 | Config directory | `/etc/alldbackup/` | `root:alldbackup`, `1775` with sticky bit, so the runtime account can update its config |
 | Local backup root | `/var/backups/alldbackup/` | `root:alldbackup`, `2775`; readable by all, writable by the group |
 | Job backup folder | `/var/backups/alldbackup/<job-name>/` | `alldbackup` group can create and remove backup files; all users can read them |
-| Cron dispatcher | root's crontab | one managed entry; checks YAML schedules each minute |
+| Cron dispatcher | root's crontab | one managed entry; checks YAML schedules every 15 minutes |
 
 ZIP and checksum files are publicly readable to local accounts by design. The group can write and remove backups, including when root cron and a regular user both run backup commands. Docker jobs require access to the Docker daemon; membership in the Docker group is effectively host-root access.
 
@@ -43,7 +43,7 @@ After logging back in as the installer account, add a job interactively:
 alldbackup config add
 ```
 
-The prompts ask for a unique job name, driver (`mysql`, `mariadb`, `postgres`, or `sqlite`), source (`host` or `docker`), connection fields, password variable name, schedule, and Google Drive path. Schedule defaults to `0 0 * * *` (every day at midnight server time); the Drive path defaults to the job name. The command never asks for the password itself.
+The prompts ask for a unique job name, driver (`mysql`, `mariadb`, `postgres`, or `sqlite`), source (`host` or `docker`), connection fields, password variable name, interval, run hour/minute, and Google Drive path. The schedule defaults to every day at `00:00` server time; the Drive path defaults to the job name. The command never asks for the password itself.
 
 You can also edit the file directly as the regular account:
 
@@ -115,7 +115,7 @@ Each ZIP contains `backup.sql` or `database.sqlite` and `metadata.json`. Local r
 
 ## 7. Automatic schedule
 
-The installer registers one root crontab line that runs `alldbackup cron tick` every minute. The dispatcher reads `/etc/alldbackup/config.yaml`, then runs enabled, valid jobs whose five-field schedule matches the server's local time. A missing schedule defaults to midnight. Changes to job schedules take effect within a minute; do not add a second `run --all` cron entry.
+The installer registers one root crontab line that runs `alldbackup cron tick` every 15 minutes. The dispatcher reads `/etc/alldbackup/config.yaml` and runs enabled, valid jobs due at their configured interval and server-local time. A missing schedule defaults to daily at midnight. Changes take effect on the next 15-minute tick; do not add a second `run --all` cron entry.
 
 Inspect the entry with:
 
@@ -124,7 +124,7 @@ sudo crontab -l
 alldbackup cron print
 ```
 
-The output of `cron print` is the one-minute dispatcher entry. It does not list a separate crontab line per job. Installer upgrades update the managed root crontab block and remove older generated per-job lines for the default config.
+The output of `cron print` is the 15-minute dispatcher entry. It does not list a separate crontab line per job. Installer upgrades update the managed root crontab block and remove older generated per-job lines for the default config.
 
 For details, see [cron scheduling](cron.md). `cron install` and `cron remove` operate on the current account's crontab; use `sudo` when managing the installed root dispatcher.
 

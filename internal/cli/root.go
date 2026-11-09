@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	cronlib "github.com/robfig/cron/v3"
 	"github.com/ramaTImati/alldbackup/internal/archive"
 	"github.com/ramaTImati/alldbackup/internal/backup"
 	"github.com/ramaTImati/alldbackup/internal/config"
@@ -24,6 +25,13 @@ import (
 )
 
 var Version = "dev"
+
+const banner = "        ,--.,--.   ,--.,--.                 ,--.\n" +
+	" ,--,--.|  ||  | ,-|  ||  |-.  ,--,--. ,---.|  |,-.,--.,--. ,---.\n" +
+	"' ,-.  ||  ||  |' .-. || .-. '' ,-.  || .--'|     /|  ||  || .-. |\n" +
+	"\\ '-'  ||  ||  |\\ `-' || `-' |\\ '-'  |\\ `--.|  \\  \\'  ''  '| '-' '\n" +
+	" \x60--\x60--'\x60--'\x60--' \x60---'  \x60---'  \x60--\x60--' \x60---'\x60--'\x60--'\x60----' |  |-'\n" +
+	"                                                           \x60--'"
 
 type options struct {
 	configPath string
@@ -56,6 +64,8 @@ func Execute() error {
 			return nil
 		},
 	}
+	root.SetHelpTemplate(banner + "\n\n" + cobra.DefaultHelpTemplate)
+	root.SetVersionTemplate(banner + "\n\n{{.Name}} {{.Version}}\n")
 	root.PersistentFlags().StringVar(&o.configPath, "config", config.DefaultPath, "configuration file")
 	root.PersistentFlags().BoolVar(&o.verbose, "verbose", false, "enable debug logging")
 	root.PersistentFlags().BoolVar(&o.quiet, "quiet", false, "show errors only")
@@ -68,8 +78,8 @@ func load(o *options) (config.Config, error) {
 	if err != nil {
 		return c, err
 	}
-	if info, err := os.Stat(o.configPath); err == nil && info.Mode().Perm()&0077 != 0 {
-		o.logger.Warn("configuration file permissions are broader than 0600", "path", o.configPath, "permissions", info.Mode().Perm().String())
+	if info, err := os.Stat(o.configPath); err == nil && info.Mode().Perm()&0022 != 0 {
+		o.logger.Warn("configuration file is writable by its group or other users", "path", o.configPath, "permissions", info.Mode().Perm().String())
 	}
 	if info, err := os.Stat(c.Storage.GoogleDrive.ConfigFile); err == nil && info.Mode().Perm()&0077 != 0 {
 		o.logger.Warn("Rclone config file permissions are broader than 0600", "path", c.Storage.GoogleDrive.ConfigFile, "permissions", info.Mode().Perm().String())
@@ -116,9 +126,6 @@ func initCommand(o *options) *cobra.Command {
 		c := config.DefaultsFor(o.configPath)
 		if err := os.MkdirAll(c.Storage.Local.Path, 0755); err != nil {
 			return fmt.Errorf("create local backup directory: %w", err)
-		}
-		if err := os.Chmod(c.Storage.Local.Path, 0755); err != nil {
-			return fmt.Errorf("set local backup directory permissions: %w", err)
 		}
 		if err := os.MkdirAll(filepath.Dir(c.SecretsFile), 0700); err != nil {
 			return fmt.Errorf("create secrets directory: %w", err)
@@ -371,12 +378,8 @@ func cleanCommand(o *options) *cobra.Command {
 }
 
 func cronCommand(o *options) *cobra.Command {
-	command := &cobra.Command{Use: "cron", Short: "Generate crontab entries from job schedules"}
-	command.AddCommand(&cobra.Command{Use: "print", Short: "Print entries for enabled jobs with a schedule", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := load(o)
-		if err != nil {
-			return err
-		}
+	command := &cobra.Command{Use: "cron", Short: "Manage automatic scheduled backups"}
+	command.AddCommand(&cobra.Command{Use: "print", Short: "Print the one-minute schedule dispatcher entry", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
 		binary, err := os.Executable()
 		if err != nil {
 			return fmt.Errorf("resolve alldbackup executable: %w", err)
@@ -389,37 +392,182 @@ func cronCommand(o *options) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		lines := cronEntries(c, binary, configPath)
-		if len(lines) == 0 {
-			fmt.Fprintln(cmd.OutOrStdout(), "# No enabled jobs have a schedule configured.")
-			return nil
-		}
-		for _, line := range lines {
-			fmt.Fprintln(cmd.OutOrStdout(), line)
-		}
+		fmt.Fprintln(cmd.OutOrStdout(), cronEntry(binary, configPath))
 		return nil
-	}})
+	}}, cronInstallCommand(o), cronRemoveCommand(o), cronTickCommand(o))
 	return command
 }
 
-func cronEntries(c config.Config, binary, configPath string) []string {
-	lines := make([]string, 0, len(c.Jobs))
-	for _, job := range c.Jobs {
-		if !job.Enabled {
-			continue
-		}
-		schedule := job.Schedule
-		if strings.TrimSpace(schedule) == "" {
-			schedule = config.DefaultJobSchedule
-		}
-		fields := strings.Fields(schedule)
-		lines = append(lines, fmt.Sprintf("%s %s run --job %s --config %s", strings.Join(fields, " "), shellQuote(binary), shellQuote(job.Name), shellQuote(configPath)))
-	}
-	return lines
+func cronEntry(binary, configPath string) string {
+	return fmt.Sprintf("* * * * * %s --config %s cron tick", shellQuote(binary), shellQuote(configPath))
 }
 
 func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
+}
+
+const cronBlockStart = "# BEGIN ALLDBACKUP MANAGED"
+const cronBlockEnd = "# END ALLDBACKUP MANAGED"
+
+func cronInstallCommand(o *options) *cobra.Command {
+	return &cobra.Command{Use: "install", Short: "Install the minute dispatcher in this account's crontab", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
+		binary, err := os.Executable()
+		if err != nil {
+			return fmt.Errorf("resolve alldbackup executable: %w", err)
+		}
+		binary, err = filepath.Abs(binary)
+		if err != nil {
+			return err
+		}
+		configPath, err := filepath.Abs(o.configPath)
+		if err != nil {
+			return err
+		}
+		if err := updateCrontab(binary, configPath, true); err != nil {
+			return err
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), "Installed alldbackup dispatcher in this account's crontab")
+		return nil
+	}}
+}
+
+func cronRemoveCommand(o *options) *cobra.Command {
+	return &cobra.Command{Use: "remove", Short: "Remove the alldbackup dispatcher from this account's crontab", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
+		binary, err := os.Executable()
+		if err != nil {
+			return fmt.Errorf("resolve alldbackup executable: %w", err)
+		}
+		binary, err = filepath.Abs(binary)
+		if err != nil {
+			return err
+		}
+		configPath, err := filepath.Abs(o.configPath)
+		if err != nil {
+			return err
+		}
+		if err := updateCrontab(binary, configPath, false); err != nil {
+			return err
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), "Removed alldbackup dispatcher from this account's crontab")
+		return nil
+	}}
+}
+
+func updateCrontab(binary, configPath string, install bool) error {
+	command := exec.Command("crontab", "-l")
+	current, err := command.Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) || !strings.Contains(strings.ToLower(string(exitErr.Stderr)), "no crontab for") {
+			return fmt.Errorf("read crontab: %w", err)
+		}
+		current = nil
+	}
+	updated, err := rewriteCrontab(string(current), binary, configPath, install)
+	if err != nil {
+		return err
+	}
+	if string(current) == updated {
+		return nil
+	}
+	command = exec.Command("crontab", "-")
+	command.Stdin = strings.NewReader(updated)
+	if output, err := command.CombinedOutput(); err != nil {
+		return fmt.Errorf("write crontab: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+func rewriteCrontab(current, binary, configPath string, install bool) (string, error) {
+	var kept []string
+	inBlock := false
+	lines := strings.Split(strings.TrimRight(current, "\r\n"), "\n")
+	if current == "" {
+		lines = nil
+	}
+	for _, line := range lines {
+		switch line {
+		case cronBlockStart:
+			if inBlock {
+				return "", errors.New("nested alldbackup crontab block")
+			}
+			inBlock = true
+			continue
+		case cronBlockEnd:
+			if !inBlock {
+				return "", errors.New("alldbackup crontab block end without start")
+			}
+			inBlock = false
+			continue
+		}
+		if inBlock || legacyCronEntry(line, binary, configPath) {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	if inBlock {
+		return "", errors.New("unterminated alldbackup crontab block")
+	}
+	if install {
+		kept = append(kept, cronBlockStart, cronEntry(binary, configPath), cronBlockEnd)
+	}
+	if len(kept) == 0 {
+		return "", nil
+	}
+	return strings.Join(kept, "\n") + "\n", nil
+}
+
+func legacyCronEntry(line, binary, configPath string) bool {
+	if !strings.Contains(line, shellQuote(binary)) || (!strings.Contains(line, " run --job ") && !strings.Contains(line, " run --all")) {
+		return false
+	}
+	if strings.Contains(line, "--config") {
+		return strings.Contains(line, shellQuote(configPath))
+	}
+	return filepath.Clean(configPath) == filepath.Clean(config.DefaultPath)
+}
+
+func cronTickCommand(o *options) *cobra.Command {
+	return &cobra.Command{Use: "tick", Short: "Run jobs whose configured schedule matches this minute", Hidden: true, Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
+		if _, err := os.Stat(o.configPath); errors.Is(err, os.ErrNotExist) {
+			return nil
+		} else if err != nil {
+			return err
+		}
+		c, jobErrors, err := config.LoadScheduled(o.configPath)
+		if err != nil {
+			return err
+		}
+		for _, jobErr := range jobErrors {
+			o.logger.Error("skipping invalid scheduled job", "error", jobErr)
+		}
+		jobs := dueJobs(c.EnabledJobs(), time.Now())
+		if len(jobs) == 0 {
+			return nil
+		}
+		ctx, cancel := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+		defer cancel()
+		drive := storage.NewRclone(c.Storage.GoogleDrive)
+		runner := backup.Runner{Config: c, Dumper: database.New(), Uploader: drive, Logger: o.logger, Version: Version}
+		return runner.Run(ctx, jobs)
+	}}
+}
+
+func dueJobs(jobs []config.Job, now time.Time) []config.Job {
+	parser := cronlib.NewParser(cronlib.Minute | cronlib.Hour | cronlib.Dom | cronlib.Month | cronlib.Dow)
+	minute := now.Truncate(time.Minute)
+	previousMinute := minute.Add(-time.Minute)
+	var due []config.Job
+	for _, job := range jobs {
+		schedule, err := parser.Parse(job.Schedule)
+		if err != nil {
+			continue
+		}
+		if schedule.Next(previousMinute).Equal(minute) {
+			due = append(due, job)
+		}
+	}
+	return due
 }
 
 func doctorCommand(o *options) *cobra.Command {
@@ -430,9 +578,6 @@ func doctorCommand(o *options) *cobra.Command {
 		}
 		if err := os.MkdirAll(c.Storage.Local.Path, 0755); err != nil {
 			return fmt.Errorf("local storage is not writable: %w", err)
-		}
-		if err := os.Chmod(c.Storage.Local.Path, 0755); err != nil {
-			return fmt.Errorf("set local storage permissions: %w", err)
 		}
 		test, err := os.CreateTemp(c.Storage.Local.Path, ".alldbackup-doctor-*")
 		if err != nil {
@@ -511,7 +656,10 @@ func verifyCommand() *cobra.Command {
 }
 
 func versionCommand() *cobra.Command {
-	return &cobra.Command{Use: "version", Short: "Print version", Args: cobra.NoArgs, Run: func(cmd *cobra.Command, args []string) { fmt.Fprintf(cmd.OutOrStdout(), "alldbackup %s\n", Version) }}
+	return &cobra.Command{Use: "version", Short: "Print version", Args: cobra.NoArgs, Run: func(cmd *cobra.Command, args []string) {
+		fmt.Fprintln(cmd.OutOrStdout(), banner)
+		fmt.Fprintf(cmd.OutOrStdout(), "alldbackup %s\n", Version)
+	}}
 }
 
 func redactCLI(err error, job config.Job, secrets map[string]string) error {

@@ -1,53 +1,33 @@
 # Google Drive with Rclone
 
-alldbackup uses Rclone for Google Drive transfers. Its Rclone configuration is kept in a dedicated file beside the other alldbackup settings: `/etc/alldbackup/rclone.conf` by default. This file stores OAuth tokens and remote credentials in Rclone's format; the main YAML stores the file path and remote destination. The dedicated file does not replace or modify `~/.config/rclone/rclone.conf`.
+alldbackup uses Rclone for Google Drive uploads. The system-wide Rclone config is `/etc/alldbackup/rclone.conf`, next to the main YAML and secrets files. It contains OAuth tokens and is owned by the account that installed alldbackup with mode `0600`. It does not replace or modify `~/.config/rclone/rclone.conf`.
 
-## 1. Install and initialize
+The installer installs the Rclone binary if it is missing. It does not create a remote or log in to Google.
 
-The installer adds the Rclone binary if it is missing. Then initialize alldbackup:
+## 1. Create and authorize a Drive remote
 
-```bash
-sudo alldbackup init
-```
-
-This creates `/etc/alldbackup/rclone.conf` as an empty file with mode `0600`. The config file is separate from the YAML because Rclone manages its own OAuth credentials and remote settings.
-
-### Existing Rclone setup
-
-If you already configured Rclone before upgrading, find its current config path with `sudo rclone config file`. To keep using that file, set `storage.google_drive.config_file` in `/etc/alldbackup/config.yaml` to the reported path. To centralize it under `/etc/alldbackup`, copy it without removing the original:
+Run setup as the regular account that installed alldbackup:
 
 ```bash
-sudo cp /root/.config/rclone/rclone.conf /etc/alldbackup/rclone.conf
-sudo chown root:root /etc/alldbackup/rclone.conf
-sudo chmod 0600 /etc/alldbackup/rclone.conf
+alldbackup drive setup
 ```
 
-Replace `/root/.config/rclone/rclone.conf` with the path printed on your server, then run `sudo alldbackup drive test`. The original Rclone config is not changed or deleted.
+In the Rclone menu:
 
-## 2. Create the Google Drive remote
+1. Enter `n` to create a new remote.
+2. Give it a short name, for example `gdrive`.
+3. Select Google Drive as the storage type.
+4. Complete the OAuth prompts and save the remote.
 
-Run the alldbackup command as the same account that will run backups:
+If the server has no browser, answer `n` when asked to use a browser on that machine. Rclone prints an `rclone authorize ...` command. Run the entire command on a computer with a browser and a compatible Rclone version, sign in to Google, approve access, then paste the complete token response back into the server terminal at the `config_token>` prompt. Keep the server terminal open while authorizing.
 
-```bash
-sudo alldbackup drive setup
-```
+If Google shows `redirect_uri_mismatch`, the OAuth desktop app's redirect URI does not match the URI Rclone is using. Use the Rclone-generated authorization flow and its displayed callback URI; do not invent a redirect URI. For details, use Rclone's [remote setup guide](https://rclone.org/remote_setup/).
 
-The command opens Rclone's interactive setup against `/etc/alldbackup/rclone.conf`. Choose `n` to create a remote, name it `gdrive`, choose Google Drive as its type, and complete the OAuth prompts. The name `gdrive` must match the remote prefix configured below.
+The remote is saved to `/etc/alldbackup/rclone.conf`. Keep this file private and do not commit it to a repository.
 
-If you initialized a custom main config path, include the same `--config /path/to/config.yaml` option when running `drive setup`, `drive test`, and other alldbackup commands.
+## 2. Set the shared remote and per-job folders
 
-If you create the remote on a computer with a browser, use Rclone's [remote setup instructions](https://rclone.org/remote_setup/) and transfer the resulting config file securely to `/etc/alldbackup/rclone.conf` on the server. Then restrict access to the backup account:
-
-```bash
-sudo chown root:root /etc/alldbackup/rclone.conf
-sudo chmod 0600 /etc/alldbackup/rclone.conf
-```
-
-If `storage.google_drive.config_file` is customized, use that path instead. The file contains OAuth credentials; do not commit it or share it publicly.
-
-## 3. Enable Google Drive
-
-Edit `/etc/alldbackup/config.yaml` and set the remote destination and Rclone config path:
+Edit `/etc/alldbackup/config.yaml` as the regular account and enable Drive:
 
 ```yaml
 storage:
@@ -58,45 +38,52 @@ storage:
     retention_days: 30
     timeout: 30m
     retries: 3
-```
-
-`remote` is the shared Rclone remote base. Each job chooses its relative destination with `google_drive_path`:
-
-```yaml
-storage:
-  google_drive:
-    remote: gdrive:alldbackup
 
 jobs:
   - name: production
     google_drive_path: teams/finance/production
+    # other job fields...
 ```
 
-That job uploads to:
+`remote` is the shared base path. Each job's relative `google_drive_path` chooses its own folder. The example uploads to:
 
 ```text
 gdrive:alldbackup/teams/finance/production/<timestamp>.zip
 gdrive:alldbackup/teams/finance/production/<timestamp>.zip.sha256
 ```
 
-If `google_drive_path` is blank or omitted, it defaults to the job name. Each job can use a different nested path.
+Each job path must be unique. If omitted, it defaults to the job name. Changing a path affects future uploads; it does not move older files.
 
-Changing a job's path redirects future uploads. Existing files remain in the previous Drive folder; alldbackup does not move them.
-
-Validate the settings and test access:
+The base remote path must exist for `alldbackup drive test` to list it. Create it once if needed:
 
 ```bash
-sudo alldbackup config validate
-sudo alldbackup drive test
-sudo alldbackup doctor
+rclone --config /etc/alldbackup/rclone.conf mkdir gdrive:alldbackup
 ```
 
-All alldbackup Rclone calls, including backup uploads and remote retention, use the configured `config_file`. `drive setup` edits this same file. A custom relative path is resolved relative to the main YAML file.
+Replace `gdrive` with the remote name you created. Job subfolders are created by Rclone during upload.
 
-## 4. Local and remote files
+Validate and test as the regular account:
 
-By default, local files are first created under `/var/backups/alldbackup/<job-name>/`. The ZIP and its `.sha256` sidecar are copied to Google Drive and checked after upload. If upload fails, the local archive and checksum remain available for a later retry.
+```bash
+alldbackup config validate
+alldbackup drive test
+alldbackup doctor
+```
 
-Local retention defaults to 7 days and Google Drive retention to 30 days. They are configured independently. Pending or failed uploads are protected from local cleanup. Set a retention value to `0` to disable cleanup for that storage.
+## 3. OAuth from a desktop
 
-For encrypted remote storage, configure an Rclone `crypt` remote in addition to the Google Drive remote, then set `storage.google_drive.remote` to the crypt remote path. Rclone handles encryption and associated remote credentials.
+If you initially configure the remote on a computer with a browser, securely copy only the resulting Rclone config into `/etc/alldbackup/rclone.conf` on the server, replacing its empty file. Keep ownership with the alldbackup installer account and mode `0600`:
+
+```bash
+install -m 0600 /secure/path/rclone.conf /etc/alldbackup/rclone.conf
+```
+
+On the default installation, the regular installer account owns this path and can replace the file. Do not use a root-owned `~/.config/rclone/rclone.conf` as a source unless you have appropriate access. The root cron dispatcher can read the dedicated config because it runs as root.
+
+If using a custom YAML config, pass `--config /path/to/config.yaml` to every alldbackup command and set that YAML's `storage.google_drive.config_file` to the dedicated Rclone file path.
+
+## 4. Uploads, retries, and retention
+
+By default, alldbackup creates an archive under `/var/backups/alldbackup/<job-name>/`, uploads the ZIP and SHA-256 sidecar, then checks the remote copies. A failed upload keeps the local archive for a later retry. Local retention defaults to 7 days; Google Drive retention defaults to 30 days. Set either retention to `0` to disable automatic cleanup for that storage.
+
+Rclone `crypt` remotes are supported: configure the Google Drive remote and a `crypt` remote in the same file, then set `storage.google_drive.remote` to the `crypt` remote path. Rclone handles encryption and credentials.

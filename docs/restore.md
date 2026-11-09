@@ -5,8 +5,8 @@ By default, a job named `production` stores its ZIP files under `/var/backups/al
 If local storage is disabled, download both the ZIP and its `.sha256` sidecar from Google Drive before verifying. The example assumes the `production` job has `google_drive_path: production`; use that job's configured path if it differs. Replace the timestamp below with the filename shown in the remote:
 
 ```bash
-sudo rclone --config /etc/alldbackup/rclone.conf copyto 'gdrive:alldbackup/production/20261106T090000.123456789+0700.zip' /tmp/production.zip
-sudo rclone --config /etc/alldbackup/rclone.conf copyto 'gdrive:alldbackup/production/20261106T090000.123456789+0700.zip.sha256' /tmp/production.zip.sha256
+rclone --config /etc/alldbackup/rclone.conf copyto 'gdrive:alldbackup/production/20261106T090000.123456789+0700.zip' /tmp/production.zip
+rclone --config /etc/alldbackup/rclone.conf copyto 'gdrive:alldbackup/production/20261106T090000.123456789+0700.zip.sha256' /tmp/production.zip.sha256
 ```
 
 Then set `BACKUP=/tmp/production.zip`. If `storage.google_drive.config_file` uses a custom path, pass that path with Rclone's `--config` option.
@@ -16,15 +16,15 @@ Then set `BACKUP=/tmp/production.zip`. If `storage.google_drive.config_file` use
 List local archives and copy the exact filename you want to restore:
 
 ```bash
-sudo find /var/backups/alldbackup -mindepth 2 -maxdepth 2 -type f -name '*.zip' -print
+find /var/backups/alldbackup -mindepth 2 -maxdepth 2 -type f -name '*.zip' -print
 ```
 
 Set `BACKUP` to one of the returned paths. For example (replace the timestamp with the real filename):
 
 ```bash
 BACKUP='/var/backups/alldbackup/production/20261106T090000.123456789+0700.zip'
-sudo alldbackup verify --file "$BACKUP"
-sudo unzip -p "$BACKUP" metadata.json
+alldbackup verify --file "$BACKUP"
+unzip -p "$BACKUP" metadata.json
 ```
 
 `verify` checks the adjacent file named `<archive>.sha256`, the ZIP contents, and the timestamp in `metadata.json`. It does not prove who created an archive; only restore archives from a trusted source. `metadata.json` is stored inside the ZIP. The database dump is either `backup.sql` or `database.sqlite`.
@@ -93,10 +93,10 @@ Clean one backup by its exact ZIP filename, or all backups belonging to one job.
 
 ```bash
 # One backup
-sudo alldbackup clean --job production 20261108T110259.289436409Z.zip
+alldbackup clean --job production 20261108T110259.289436409Z.zip
 
 # All backups for this job
-sudo alldbackup clean --job production --all
+alldbackup clean --job production --all
 ```
 
 Pass exactly one ZIP basename or `--all`. There is no per-storage selection. Local clean removes ZIPs, `.sha256` sidecars, and `.uploaded` markers, including local retry-spool files when local retention is disabled. Google Drive clean removes ZIPs and `.sha256` sidecars when enabled. The operation is scoped to the named job, ignores unrelated files, and never removes the job folder.

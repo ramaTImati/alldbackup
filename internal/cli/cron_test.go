@@ -3,20 +3,51 @@ package cli
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/ramaTImati/alldbackup/internal/config"
 )
 
-func TestCronEntriesUseMidnightFallbackAndSkipDisabledJobs(t *testing.T) {
-	c := config.Config{Jobs: []config.Job{
-		{Name: "daily", Enabled: true, Schedule: "0 2 * * *"},
-		{Name: "manual", Enabled: true},
-		{Name: "disabled", Enabled: false, Schedule: "0 3 * * *"},
-	}}
-	want := []string{"0 2 * * * '/opt/alldbackup' run --job 'daily' --config '/etc/alldbackup/config.yaml'"}
-	want = append(want, "0 0 * * * '/opt/alldbackup' run --job 'manual' --config '/etc/alldbackup/config.yaml'")
-	if got := cronEntries(c, "/opt/alldbackup", "/etc/alldbackup/config.yaml"); !reflect.DeepEqual(got, want) {
-		t.Fatalf("cronEntries() = %#v, want %#v", got, want)
+func TestRewriteCrontabInstallsIdempotentlyAndPreservesUnrelatedEntries(t *testing.T) {
+	binary, configPath := "/usr/local/bin/alldbackup", "/etc/alldbackup/config.yaml"
+	original := "# other task\n0 4 * * * /usr/local/bin/cleanup\n" +
+		"0 2 * * * '/usr/local/bin/alldbackup' run --job 'old' --config '/etc/alldbackup/config.yaml'\n" +
+		"0 3 * * * '/usr/local/bin/alldbackup' run --all --config '/etc/alldbackup/config.yaml'\n"
+	got, err := rewriteCrontab(original, binary, configPath, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "# other task\n0 4 * * * /usr/local/bin/cleanup\n" + cronBlockStart + "\n" +
+		"* * * * * '/usr/local/bin/alldbackup' --config '/etc/alldbackup/config.yaml' cron tick\n" + cronBlockEnd + "\n"
+	if got != want {
+		t.Fatalf("rewritten crontab = %q, want %q", got, want)
+	}
+	again, err := rewriteCrontab(got, binary, configPath, true)
+	if err != nil || again != got {
+		t.Fatalf("second install = %q, %v; want unchanged crontab", again, err)
+	}
+	removed, err := rewriteCrontab(got, binary, configPath, false)
+	if err != nil || removed != "# other task\n0 4 * * * /usr/local/bin/cleanup\n" {
+		t.Fatalf("remove = %q, %v", removed, err)
+	}
+}
+
+func TestRewriteCrontabRejectsMalformedManagedBlock(t *testing.T) {
+	if _, err := rewriteCrontab(cronBlockEnd+"\n", "/usr/local/bin/alldbackup", config.DefaultPath, true); err == nil {
+		t.Fatal("accepted a crontab block with an unmatched end marker")
+	}
+}
+
+func TestDueJobsMatchesOnlyTheCurrentServerMinute(t *testing.T) {
+	now := time.Date(2026, time.November, 9, 2, 30, 42, 0, time.FixedZone("server", 7*60*60))
+	jobs := []config.Job{
+		{Name: "matches", Schedule: "30 2 * * *"},
+		{Name: "other-minute", Schedule: "31 2 * * *"},
+		{Name: "invalid", Schedule: "hourly"},
+	}
+	got := dueJobs(jobs, now)
+	if !reflect.DeepEqual(got, jobs[:1]) {
+		t.Fatalf("dueJobs() = %#v, want only %#v", got, jobs[:1])
 	}
 }
 

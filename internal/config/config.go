@@ -94,6 +94,69 @@ func DefaultsFor(path string) Config {
 }
 
 func Load(path string) (Config, error) {
+	c, err := read(path)
+	if err != nil {
+		return Config{}, err
+	}
+	if err := c.Validate(); err != nil {
+		return Config{}, err
+	}
+	return c, nil
+}
+
+// LoadScheduled validates shared settings strictly and skips invalid enabled jobs.
+func LoadScheduled(path string) (Config, []error, error) {
+	c, err := read(path)
+	if err != nil {
+		return Config{}, nil, err
+	}
+	base := c
+	base.Jobs = nil
+	if err := base.Validate(); err != nil {
+		return Config{}, nil, err
+	}
+	type scheduledJob struct {
+		index int
+		job   Job
+	}
+	var validJobs []scheduledJob
+	var jobErrors []error
+	for i, job := range c.Jobs {
+		if !job.Enabled {
+			continue
+		}
+		candidate := c
+		candidate.Jobs = []Job{job}
+		if err := candidate.Validate(); err != nil {
+			jobErrors = append(jobErrors, fmt.Errorf("job %q (jobs[%d]): %w", job.Name, i, err))
+			continue
+		}
+		validJobs = append(validJobs, scheduledJob{index: i, job: job})
+	}
+	nameCounts := make(map[string]int, len(validJobs))
+	drivePathCounts := make(map[string]int, len(validJobs))
+	for _, item := range validJobs {
+		nameCounts[item.job.Name]++
+		drivePathCounts[item.job.GoogleDrivePath]++
+	}
+	var jobs []Job
+	for _, item := range validJobs {
+		job := item.job
+		if nameCounts[job.Name] > 1 {
+			jobErrors = append(jobErrors, fmt.Errorf("job %q (jobs[%d]): duplicate enabled job name", job.Name, item.index))
+			continue
+		}
+		if drivePathCounts[job.GoogleDrivePath] > 1 {
+			jobErrors = append(jobErrors, fmt.Errorf("job %q (jobs[%d]): duplicate enabled Google Drive path %q", job.Name, item.index, job.GoogleDrivePath))
+			continue
+		}
+		jobs = append(jobs, job)
+	}
+	c.Jobs = jobs
+	return c, jobErrors, nil
+}
+
+func read(path string) (Config, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return Config{}, fmt.Errorf("read config %q: %w", path, err)
@@ -113,9 +176,6 @@ func Load(path string) (Config, error) {
 	}
 	if c.Storage.GoogleDrive.ConfigFile != "" && !filepath.IsAbs(c.Storage.GoogleDrive.ConfigFile) {
 		c.Storage.GoogleDrive.ConfigFile = filepath.Join(filepath.Dir(path), c.Storage.GoogleDrive.ConfigFile)
-	}
-	if err := c.Validate(); err != nil {
-		return Config{}, err
 	}
 	return c, nil
 }
@@ -270,11 +330,16 @@ func Write(path string, c Config) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return fmt.Errorf("create config directory: %w", err)
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
 	if err != nil {
 		return err
 	}
 	if _, err := f.Write(b); err != nil {
+		f.Close()
+		os.Remove(path)
+		return err
+	}
+	if err := f.Chmod(0644); err != nil {
 		f.Close()
 		os.Remove(path)
 		return err
@@ -297,13 +362,24 @@ func AddJob(path string, job Job) error {
 	if err != nil {
 		return err
 	}
-	tmp := path + ".partial"
+	tmpFile, err := os.CreateTemp(filepath.Dir(path), ".config-*.partial")
+	if err != nil {
+		return err
+	}
+	tmp := tmpFile.Name()
 	defer os.Remove(tmp)
-	if err := os.WriteFile(tmp, b, 0600); err != nil {
+	if err := tmpFile.Chmod(0644); err != nil {
+		tmpFile.Close()
+		return err
+	}
+	if _, err := tmpFile.Write(b); err != nil {
+		tmpFile.Close()
+		return err
+	}
+	if err := tmpFile.Close(); err != nil {
 		return err
 	}
 	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
 		return err
 	}
 	return nil
@@ -348,8 +424,8 @@ func ReadSecrets(path string, warn func(string, ...any)) (map[string]string, err
 	if err != nil {
 		return nil, fmt.Errorf("stat secrets file: %w", err)
 	}
-	if info.Mode().Perm()&0077 != 0 && warn != nil {
-		warn("secrets file permissions are broader than 0600", "path", path, "permissions", info.Mode().Perm().String())
+	if info.Mode().Perm()&0037 != 0 && warn != nil {
+		warn("secrets file permits group writes or access by other users", "path", path, "permissions", info.Mode().Perm().String())
 	}
 	f, err := os.Open(path)
 	if err != nil {

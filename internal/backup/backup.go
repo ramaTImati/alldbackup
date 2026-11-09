@@ -52,20 +52,31 @@ func (r *Runner) runJob(ctx context.Context, job config.Job, secrets map[string]
 	if err := os.MkdirAll(root, 0755); err != nil {
 		return fmt.Errorf("create backup storage directory: %w", err)
 	}
-	if err := os.Chmod(root, 0755); err != nil {
-		return fmt.Errorf("set backup storage directory permissions: %w", err)
-	}
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := ensureDirectory(dir, 0775|os.ModeSetgid); err != nil {
 		return fmt.Errorf("create backup directory: %w", err)
 	}
-	if err := os.Chmod(dir, 0755); err != nil {
-		return fmt.Errorf("set backup directory permissions: %w", err)
-	}
 	lockDir := filepath.Join(root, ".locks")
-	if err := os.MkdirAll(lockDir, 0700); err != nil {
+	if err := ensureDirectory(lockDir, 0770|os.ModeSetgid); err != nil {
 		return fmt.Errorf("create lock directory: %w", err)
 	}
-	lock := flock.New(filepath.Join(lockDir, job.Name+".lock"))
+	lockPath := filepath.Join(lockDir, job.Name+".lock")
+	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0660)
+	if err != nil {
+		return fmt.Errorf("create job lock: %w", err)
+	}
+	if info, err := lockFile.Stat(); err != nil {
+		lockFile.Close()
+		return fmt.Errorf("inspect job lock: %w", err)
+	} else if info.Mode().Perm()&0060 != 0060 {
+		if err := lockFile.Chmod(0660); err != nil {
+			lockFile.Close()
+			return fmt.Errorf("set job lock group permissions: %w", err)
+		}
+	}
+	if err := lockFile.Close(); err != nil {
+		return fmt.Errorf("close job lock: %w", err)
+	}
+	lock := flock.New(lockPath)
 	locked, err := lock.TryLock()
 	if err != nil {
 		return fmt.Errorf("acquire backup lock: %w", err)
@@ -148,6 +159,24 @@ func (r *Runner) runJob(ctx context.Context, job config.Job, secrets map[string]
 	}
 	r.Logger.Info("backup completed", "job", job.Name, "duration", time.Since(started).Round(time.Millisecond))
 	return nil
+}
+
+func ensureDirectory(path string, mode os.FileMode) error {
+	err := os.Mkdir(path, mode)
+	if errors.Is(err, os.ErrExist) {
+		info, statErr := os.Lstat(path)
+		if statErr != nil {
+			return statErr
+		}
+		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("%q is not a directory", path)
+		}
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return os.Chmod(path, mode)
 }
 
 func redact(message string, job config.Job, secrets map[string]string) string {

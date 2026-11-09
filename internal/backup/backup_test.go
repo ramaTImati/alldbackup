@@ -45,6 +45,18 @@ func TestRunSkipsAJobThatIsAlreadyLocked(t *testing.T) {
 		t.Fatalf("unexpected lock error: %v", err)
 	}
 }
+
+func TestEnsureDirectoryRejectsSymlinks(t *testing.T) {
+	target := t.TempDir()
+	link := filepath.Join(t.TempDir(), "job")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if err := ensureDirectory(link, 0775|os.ModeSetgid); err == nil {
+		t.Fatal("accepted a symlink as a backup directory")
+	}
+}
+
 func (fakeDumper) Dump(_ context.Context, _ config.Job, _ map[string]string, dst io.Writer) error {
 	_, err := io.WriteString(dst, "CREATE TABLE example(id INTEGER);\n")
 	return err

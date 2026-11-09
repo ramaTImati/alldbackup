@@ -1,10 +1,12 @@
-# Schedule each job with cron
+# Automatic backup schedules
 
-alldbackup has no background scheduler. The optional `schedule` field on each job stores its five-field cron expression, and the system cron service starts alldbackup at those times. `run --all` and `run --job` still run immediately when called manually.
+The installer sets up system cron on Ubuntu/Debian and adds one managed dispatcher entry to **root's crontab**. It runs every minute. `alldbackup` reads the YAML at each tick and starts only enabled, valid jobs whose schedule matches the current server-local minute. You do not need to create a separate cron line per job.
 
-## 1. Set a schedule per job
+Manual `alldbackup run --job NAME` and `alldbackup run --all` still start backups immediately; they do not wait for schedules.
 
-Edit the YAML file (default `/etc/alldbackup/config.yaml`) or run `sudo alldbackup config add`. Every enabled job gets a schedule. If `schedule` is omitted or left blank, it defaults to `0 0 * * *` (daily at midnight in the server's timezone).
+## 1. Set a schedule for each job
+
+Edit `/etc/alldbackup/config.yaml` as the regular account, or use `alldbackup config add`. A schedule uses five fields: `minute hour day-of-month month day-of-week`.
 
 ```yaml
 jobs:
@@ -26,57 +28,85 @@ jobs:
 
   - name: sqlite-host
     enabled: true
-    # omitted schedule defaults to daily at 00:00 server time
+    # omitted or blank schedule runs daily at 00:00 server time
     google_drive_path: archives/sqlite
     driver: sqlite
     source: host
     # connection fields...
 ```
 
-The five fields are `minute hour day-of-month month day-of-week`. Cron uses the server's local timezone by default. If you set `CRON_TZ` in the crontab, cron uses that timezone for the schedule. The top-level `timestamp_timezone` setting only affects archive filenames; it does not change when a job runs.
+Examples:
 
-## 2. Generate and install the crontab entries
+| Schedule | Runs |
+| --- | --- |
+| `0 0 * * *` | Every day at 00:00 |
+| `0 2 * * *` | Every day at 02:00 |
+| `30 2 * * *` | Every day at 02:30 |
+| `*/15 * * * *` | Every 15 minutes |
+| `0 3 * * 1` | Mondays at 03:00 |
 
-After setting schedules, print the entries:
+Cron uses the server's local timezone. `timestamp_timezone` only changes archive filename timestamps; metadata remains UTC. The dispatcher re-reads the YAML every minute, so schedule and enabled-state changes need no cron edit or service restart.
+
+Validate YAML after editing:
 
 ```bash
-sudo /usr/local/bin/alldbackup --config /etc/alldbackup/config.yaml cron print
+alldbackup config validate
+alldbackup config list
 ```
 
-The command prints one entry for every enabled job, including jobs that use the midnight default. It uses the absolute path of the running binary and the selected config file, so the output can be pasted directly into the crontab. It does not modify the crontab automatically.
+## 2. Confirm the dispatcher
 
-Open root's crontab:
+The installer maintains this root crontab entry inside a managed block:
+
+```cron
+* * * * * '/usr/local/bin/alldbackup' --config '/etc/alldbackup/config.yaml' cron tick
+```
+
+Inspect root's crontab and the entry that `alldbackup` prints:
+
+```bash
+sudo crontab -l
+alldbackup cron print
+```
+
+`cron print` prints the dispatcher line once, not one line per job. To reinstall the managed block manually, run `sudo alldbackup cron install`. The installer does this automatically and repeat installs are idempotent. The block update preserves unrelated root crontab lines and removes old alldbackup per-job entries for the default config.
+
+If an older version had a custom `--config` path or entries in your personal crontab, inspect and remove those old entries to prevent duplicate backups:
 
 ```bash
 sudo crontab -e
+crontab -e
 ```
 
-Paste the output from `cron print`, save, and exit. For example:
+## 3. Test and check results
 
-```cron
-0 2 * * * '/usr/local/bin/alldbackup' run --job 'mysql-host' --config '/etc/alldbackup/config.yaml'
-30 2 * * * '/usr/local/bin/alldbackup' run --job 'postgres-docker' --config '/etc/alldbackup/config.yaml'
-```
-
-Do not put `sudo` in root's crontab. If you use a non-root user's crontab, ensure that user can read the config and secrets, access the database or Docker daemon, and write the backup directory. Run `cron print` again whenever job schedules, binary path, or config path change, then replace the existing alldbackup entries. Remove any older `run --all` entry if it would duplicate these per-job runs.
-
-## 3. Check the setup
-
-Run both checks as the same account that owns the crontab:
+Check connectivity and run an immediate backup as the regular account:
 
 ```bash
-sudo /usr/local/bin/alldbackup doctor --config /etc/alldbackup/config.yaml
-sudo /usr/local/bin/alldbackup run --all --config /etc/alldbackup/config.yaml
+alldbackup doctor
+alldbackup run --all
 ```
 
-The second command is an immediate manual run of every enabled job; it ignores the configured schedules. Successful archives and `.zip.sha256` sidecars are written under `/var/backups/alldbackup/<job-name>/` by default.
+Cron runs jobs as root, so it can read `/etc/alldbackup/secrets.env` and write the shared backup folders. A failed scheduled job is logged, but the dispatcher can still try other due jobs. Invalid individual jobs are skipped; malformed YAML or invalid shared storage settings stop that tick. Check cron's system logs or root's local mail for command output.
 
-## 4. Logs and troubleshooting
+Default output for job `mysql-host`:
 
-Cron does not write a log file by default. Use cron mail or redirect output to a file writable by the cron account, for example:
-
-```cron
-0 2 * * * '/usr/local/bin/alldbackup' run --job 'mysql-host' --config '/etc/alldbackup/config.yaml' >> /var/log/alldbackup.log 2>&1
+```text
+/var/backups/alldbackup/mysql-host/<timestamp>.zip
+/var/backups/alldbackup/mysql-host/<timestamp>.zip.sha256
 ```
 
-Create the log file with permissions appropriate for the crontab account and rotate it separately. Cron has a limited environment, so use absolute paths and store database credentials in the protected secrets file rather than relying on interactive shell variables.
+## 4. Remove scheduling during uninstall
+
+Remove only alldbackup's marked block from root crontab:
+
+```bash
+sudo alldbackup cron remove
+sudo crontab -l
+```
+
+Unrelated root cron entries are retained. Then remove the binary if uninstalling; see [installation and uninstall](installation.md#uninstall).
+
+## Non-Ubuntu/Debian systems
+
+The installer does not install cron on other distributions. Install and enable a cron service yourself, then put the printed `cron tick` dispatcher line in root's crontab. Keep the one-minute interval; job schedules are evaluated by alldbackup from YAML.

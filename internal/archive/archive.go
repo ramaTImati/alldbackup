@@ -131,7 +131,7 @@ func Create(dir string, metadata Metadata, dumpName string, dump func(io.Writer)
 		return "", fmt.Errorf("write checksum: %w", err)
 	}
 	for _, path := range []string{partialPath, partialSidecar} {
-		if err := os.Chmod(path, 0644); err != nil {
+		if err := os.Chmod(path, 0664); err != nil {
 			return "", fmt.Errorf("make backup readable by all users: %w", err)
 		}
 	}

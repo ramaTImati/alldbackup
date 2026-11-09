@@ -1,10 +1,10 @@
-# Installation and first backup
+# Installation, permissions, update, and uninstall
 
-These steps assume a Linux server and use the default paths. Run commands with `sudo` when the files are under `/etc` or `/var`, and use the same account for setup, backup runs, and cron.
+The installer supports Ubuntu and Debian. Installation and upgrade are system-wide and require `sudo`; after the first login refresh, normal job configuration and backup commands run as your regular account. Cron runs as root and dispatches due jobs every minute.
 
-## 1. Install alldbackup
+## 1. Install
 
-Download and run the latest installer:
+Run these commands from a regular account with `sudo` access:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ramaTImati/alldbackup/main/scripts/install.sh -o /tmp/alldbackup-install.sh
@@ -12,174 +12,156 @@ sudo bash /tmp/alldbackup-install.sh
 rm /tmp/alldbackup-install.sh
 ```
 
-The installer verifies the alldbackup release checksum and installs the binary as `/usr/local/bin/alldbackup`. It checks whether `rclone` is on `PATH`; if not, it downloads and runs [Rclone's official installer](https://rclone.org/install/). On Linux, that installer places Rclone in `/usr/bin/rclone`. It needs `unzip`, `7z`, or `busybox` to extract its download. Installing Rclone does not create a remote or modify an existing Rclone config.
+The installer verifies the latest release archive against `checksums.txt` before replacing the binary. It creates the `alldbackup` system group and adds the account that invoked `sudo` to it. Log out and back in so the new group membership is available to your shell. If you need it immediately in the current terminal, run `newgrp alldbackup`.
 
-## 2. Initialize the default files
+If Rclone is not installed, the installer runs Rclone's official installer. If cron is missing, the installer installs it with APT and enables/starts the service. These automatic system steps support Ubuntu and Debian only. A non-Debian distribution must install and start cron manually before using the scheduler.
 
-```bash
-sudo alldbackup init
-```
+The installer creates an empty default YAML config and credentials files; it does not create a database job or authorize Google Drive. It never replaces existing config, secrets, Rclone config, or backups during upgrade.
 
-This creates an empty configuration, an empty secrets file, an empty Rclone config file, and the local backup directory. It does not create a database job, database password, or Google Drive remote. It refuses to overwrite an existing alldbackup config.
+## 2. Files and access
 
-| Purpose | Default path | Created by |
+| Purpose | Default path | Owner/mode and use |
 | --- | --- | --- |
-| alldbackup binary | `/usr/local/bin/alldbackup` | Installer |
-| Main YAML config | `/etc/alldbackup/config.yaml` | `alldbackup init` |
-| Secrets file | `/etc/alldbackup/secrets.env` | `alldbackup init`, mode `0600` |
-| Rclone config | `/etc/alldbackup/rclone.conf` | `alldbackup init`, mode `0600`; add a remote with `alldbackup drive setup` |
-| Local backup root | `/var/backups/alldbackup/` | `alldbackup init`; mode `0755` |
-| Rclone binary | `/usr/bin/rclone` | Rclone's official installer, only if absent |
+| CLI binary | `/usr/local/bin/alldbackup` | `root:root`, `0755`; installer manages updates |
+| Main YAML | `/etc/alldbackup/config.yaml` | installer account:`alldbackup`, `0644`; edit as the regular account |
+| Database secrets | `/etc/alldbackup/secrets.env` | `root:alldbackup`, `0640`; edit with `sudoedit` |
+| Rclone credentials | `/etc/alldbackup/rclone.conf` | installer account:`alldbackup`, `0600`; edit with `alldbackup drive setup` |
+| Config directory | `/etc/alldbackup/` | `root:alldbackup`, `1775` with sticky bit, so the runtime account can update its config |
+| Local backup root | `/var/backups/alldbackup/` | `root:alldbackup`, `2775`; readable by all, writable by the group |
+| Job backup folder | `/var/backups/alldbackup/<job-name>/` | `alldbackup` group can create and remove backup files; all users can read them |
+| Cron dispatcher | root's crontab | one managed entry; checks YAML schedules each minute |
 
-`/etc/alldbackup` is owned by root and private because it contains database passwords and Rclone OAuth credentials; a regular user will get `Permission denied` when trying to `cd` into it. Use `sudoedit` to edit files there and keep it private. The backup destination is different: `/var/backups/alldbackup` and each job folder use mode `0755`, while completed ZIP and checksum files use `0644`. All local users can list and read backup contents, but only the account running alldbackup can write or delete them. This makes database contents readable to every local account on the server.
+ZIP and checksum files are publicly readable to local accounts by design. The group can write and remove backups, including when root cron and a regular user both run backup commands. Docker jobs require access to the Docker daemon; membership in the Docker group is effectively host-root access.
 
-Backups made by older versions remain private until their permissions are updated once. For the default path, run:
-
-```bash
-sudo chmod 0755 /var/backups/alldbackup
-sudo find /var/backups/alldbackup -mindepth 1 -path '*/.locks' -prune -o -type d -exec chmod 0755 {} +
-sudo find /var/backups/alldbackup -path '*/.locks' -prune -o -type f \( -name '*.zip' -o -name '*.zip.sha256' \) -exec chmod 0644 {} +
-```
-
-Replace `/var/backups/alldbackup` if `storage.local.path` uses a custom value.
-
-The dedicated Rclone config keeps Google Drive credentials beside alldbackup's other setup files without replacing a user's existing `~/.config/rclone/rclone.conf`.
+If this account needs Docker access, add it to the Docker group according to your host's Docker setup, then log out and back in. The alldbackup installer does not alter Docker permissions.
 
 ## 3. Add a database job
 
-Start the interactive job editor:
+After logging back in as the installer account, add a job interactively:
 
 ```bash
-sudo alldbackup config add
+alldbackup config add
 ```
 
-Enter a lowercase job name, database driver, source (`host` or `docker`), and connection details. For SQL databases, enter the name of an environment variable for the password, such as `MYSQL_BACKUP_PASSWORD`. The command asks for a five-field cron schedule (default `0 0 * * *`) and a Google Drive path (default: the job name); press Enter to accept either default. The command saves the job to `/etc/alldbackup/config.yaml`; it never prompts for the password value. SQLite does not need a password.
+The prompts ask for a unique job name, driver (`mysql`, `mariadb`, `postgres`, or `sqlite`), source (`host` or `docker`), connection fields, password variable name, schedule, and Google Drive path. Schedule defaults to `0 0 * * *` (every day at midnight server time); the Drive path defaults to the job name. The command never asks for the password itself.
 
-Alternatively, edit the YAML manually as root with `sudoedit` (you do not need to `cd` into `/etc/alldbackup`):
+You can also edit the file directly as the regular account:
 
 ```bash
-sudoedit /etc/alldbackup/config.yaml
-sudo alldbackup config validate
+nano /etc/alldbackup/config.yaml
+alldbackup config validate
 ```
 
-The complete [`config.example.yaml`](../configs/config.example.yaml) shows all supported drivers and sources. In a Docker job, `container` is the container name and the dump utility must be inside that container. In a host job, the dump utility must be installed on the Linux server.
+The installer-created file starts with `jobs: []`. For complete examples, see [`config.example.yaml`](../configs/config.example.yaml) and [configuration](configuration.md). Host jobs need the database dump utility on the Linux host. Docker jobs need Docker CLI access and the matching dump utility inside the selected container.
 
 ## 4. Add database passwords
 
-Edit the secrets file:
+Edit the root-owned secrets file with `sudoedit`:
 
 ```bash
 sudoedit /etc/alldbackup/secrets.env
-sudo chmod 0600 /etc/alldbackup/secrets.env
 ```
 
-Add the exact variable name used by the job, with one `KEY=value` entry per line. Example:
+Add the exact variable name entered as `password_env`, one `KEY=value` per line:
 
 ```dotenv
 MYSQL_BACKUP_PASSWORD=replace-with-the-database-password
 POSTGRES_BACKUP_PASSWORD=replace-with-another-password
 ```
 
-Do not add quotes or shell commands. Values are read literally after the first `=`. If the same variable is in the process environment, that value takes precedence over the secrets file.
+Do not add shell quotes or commands. Values are read literally after the first `=`. A process environment variable with the same name takes precedence. The file remains `root:alldbackup` mode `0640`; do not change it to world-readable. SQLite does not need a password.
 
-## 5. Validate and check dependencies
+## 5. Set up Google Drive (optional)
 
-```bash
-sudo alldbackup config validate
-sudo alldbackup doctor
-```
-
-`doctor` checks the local backup directory, each enabled job's dump utility and database connection, and Rclone access if Google Drive is enabled. Resolve any reported missing utility, connection, permission, or remote error before scheduling backups.
-
-## 6. Run a backup and find its files
-
-Run a single job or all enabled jobs:
+Rclone's executable is installed automatically if missing, but the installer does not create or authorize a remote. Configure it as the regular account:
 
 ```bash
-sudo alldbackup run --job production
-sudo alldbackup run --all
+alldbackup drive setup
 ```
 
-These commands start a backup immediately and exit; they do not schedule future runs. Use [cron](cron.md) to install the per-job schedules configured in YAML.
+The Rclone setup is saved to `/etc/alldbackup/rclone.conf`. Choose `n` to create a remote, choose Google Drive, complete OAuth, then set the matching remote in `/etc/alldbackup/config.yaml`. Enable `storage.google_drive.enabled` and set each job's `google_drive_path`. Test access with:
 
-For a job named `production`, the files are written under:
+```bash
+alldbackup config validate
+alldbackup drive test
+```
+
+See [Google Drive setup](google-drive.md) for headless server and desktop OAuth steps.
+
+## 6. Check and run a backup
+
+Check configured utilities, database access, backup path, and Drive if enabled:
+
+```bash
+alldbackup doctor
+```
+
+Run a backup immediately, regardless of its configured schedule:
+
+```bash
+alldbackup run --job production
+alldbackup run --all
+```
+
+For the default local path, a job named `production` writes its files to:
 
 ```text
 /var/backups/alldbackup/production/
-├── 20261106T090000.123456789+0700.zip
-└── 20261106T090000.123456789+0700.zip.sha256
+├── 20261109T020000.123456789Z.zip
+└── 20261109T020000.123456789Z.zip.sha256
 ```
 
-The `+0700` suffix is an example for `timestamp_timezone: "+07:00"`; UTC is the default and uses a `Z` suffix. Each ZIP contains `backup.sql` or `database.sqlite` and `metadata.json`. The metadata timestamp is always UTC. Run `alldbackup verify --file /absolute/path/to/backup.zip` to check the ZIP and its checksum.
+Each ZIP contains `backup.sql` or `database.sqlite` and `metadata.json`. Local retention defaults to 7 days and Google Drive retention to 30 days; set either value to `0` to disable its automatic cleanup. Verify a ZIP with `alldbackup verify --file /path/to/file.zip`.
 
-`alldbackup init` writes `storage.local.retention_days: 7` into `config.yaml`. Local backups older than 7 days are removed after a run. If Google Drive is enabled, failed or pending uploads are kept locally for retry. Change this value to keep backups for another number of days; set it to `0` to disable local cleanup.
+## 7. Automatic schedule
 
-## Custom config path
+The installer registers one root crontab line that runs `alldbackup cron tick` every minute. The dispatcher reads `/etc/alldbackup/config.yaml`, then runs enabled, valid jobs whose five-field schedule matches the server's local time. A missing schedule defaults to midnight. Changes to job schedules take effect within a minute; do not add a second `run --all` cron entry.
 
-For example, to keep all alldbackup files under `/opt/alldbackup`:
+Inspect the entry with:
 
 ```bash
-sudo alldbackup --config /opt/alldbackup/config.yaml init
+sudo crontab -l
+alldbackup cron print
 ```
 
-For a non-default config path, `init` places `secrets.env`, `rclone.conf`, and the default `backups/` directory beside that YAML file. It does not change the binary path. Edit the YAML if you want other storage paths, and pass the same option on every command:
+The output of `cron print` is the one-minute dispatcher entry. It does not list a separate crontab line per job. Installer upgrades update the managed root crontab block and remove older generated per-job lines for the default config.
 
-```bash
-sudo alldbackup --config /opt/alldbackup/config.yaml config add
-sudo alldbackup --config /opt/alldbackup/config.yaml run --all
-```
-
-Cron must also use this exact config path. See [cron](cron.md), [configuration](configuration.md), and [Google Drive](google-drive.md).
-
-## Database utilities and Docker
-
-For host jobs, install `mysqldump` or `mariadb-dump`, `pg_dump`, or `sqlite3` on the Linux server. For Docker jobs, install the matching dump utility in the database container and install Docker CLI on the server. alldbackup copies temporary credential files into a Docker container for SQL dumps and removes them afterward. Access to the Docker socket is effectively host-root access.
-
-## Manual binary installation
-
-Download the Linux amd64 or arm64 tarball and `checksums.txt` from [GitHub Releases](https://github.com/ramaTImati/alldbackup/releases). Verify the archive checksum before extracting `alldbackup`, then install it as `/usr/local/bin/alldbackup` with mode `0755`. This manual method does not install Rclone or configure any database/Google Drive credentials.
+For details, see [cron scheduling](cron.md). `cron install` and `cron remove` operate on the current account's crontab; use `sudo` when managing the installed root dispatcher.
 
 ## Upgrade
 
-To upgrade an installation made with the installer, run it again. It downloads the latest release, checks its checksum, and replaces `/usr/local/bin/alldbackup`:
+Run the same installer again. It downloads the latest release, verifies its checksum, updates the binary, migrates default directory permissions, and idempotently updates the root cron block:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ramaTImati/alldbackup/main/scripts/install.sh -o /tmp/alldbackup-install.sh
 sudo bash /tmp/alldbackup-install.sh
 rm /tmp/alldbackup-install.sh
-sudo alldbackup version
 ```
 
-The installer leaves `/etc/alldbackup/config.yaml`, `secrets.env`, `rclone.conf`, and backup files unchanged. It installs Rclone only if `rclone` is missing from `PATH`; it does not upgrade an existing Rclone installation. For a version-pinned upgrade, use the checksum-verified manual binary installation steps above and replace `/usr/local/bin/alldbackup`.
+The installer keeps existing YAML, secrets, Rclone OAuth config, and backup contents. Old default-config cron entries generated by alldbackup are replaced by the dispatcher. If you had a custom-config cron entry or a per-user cron entry, inspect that account's crontab and remove the old line to avoid duplicate runs:
+
+```bash
+sudo crontab -e   # root crontab
+crontab -e        # current user's crontab, if previously used
+```
+
+An existing account may need to log out and back in after an installer run if it was newly added to the group.
 
 ## Uninstall
 
-There is no built-in uninstall command. First remove alldbackup's cron entries so cron does not keep invoking the removed binary:
+Remove the root dispatcher and binary:
 
 ```bash
-sudo crontab -e
-```
-
-Remove the generated alldbackup lines. If you installed entries in your own user's crontab, edit that too with `crontab -e`.
-
-Then remove the binary:
-
-```bash
+sudo alldbackup cron remove
 sudo rm -f /usr/local/bin/alldbackup
 ```
 
-This leaves the configuration and data in place so you can reinstall or recover backups later:
+This keeps the cron package, Rclone, config, credentials, local archives, and Google Drive files. It also leaves the `alldbackup` group in place. To remove only this account's group membership, run `sudo gpasswd -d "$USER" alldbackup`; remove the group only if no other account or service uses it.
 
-- `/etc/alldbackup/config.yaml` — jobs and storage settings;
-- `/etc/alldbackup/secrets.env` — database passwords;
-- `/etc/alldbackup/rclone.conf` — Google Drive OAuth credentials;
-- `/var/backups/alldbackup/` — local archives and checksums;
-- files in Google Drive — remote archives are not deleted by uninstalling the CLI.
-
-Rclone is installed separately and may be used by other programs, so the uninstall steps leave its binary and per-user configuration alone. If you intentionally want to erase alldbackup's default local data too, inspect the configured paths first, then remove the directories interactively:
+To erase the default local configuration and backup files, inspect them first and then remove them explicitly:
 
 ```bash
 sudo rm -ri /etc/alldbackup /var/backups/alldbackup
 ```
 
-This deletes the local config, database passwords, Rclone OAuth tokens, and local backup archives. It does not delete files stored in Google Drive. If you used a custom config or backup path, remove those paths separately only after checking their contents.
+This deletes database passwords, Rclone OAuth credentials, and local database backups. It does not delete Google Drive files. If YAML uses custom paths, inspect and remove those separately only when you are sure the directories contain no unrelated data.

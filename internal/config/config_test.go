@@ -189,6 +189,118 @@ func TestLoadRejectsUnknownYAMLField(t *testing.T) {
 	}
 }
 
+func TestLoadScheduledSkipsInvalidJobsAndRejectsInvalidSharedConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	data := `version: 1
+jobs:
+  - name: good
+    enabled: true
+    driver: sqlite
+    source: host
+    file: /tmp/good.sqlite
+  - name: broken
+    enabled: true
+    driver: unknown
+    source: host
+  - name: disabled-broken
+    enabled: false
+    driver: unknown
+    source: invalid
+`
+	if err := os.WriteFile(path, []byte(data), 0600); err != nil {
+		t.Fatal(err)
+	}
+	c, jobErrors, err := LoadScheduled(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobErrors) != 1 || len(c.Jobs) != 1 || c.Jobs[0].Name != "good" {
+		t.Fatalf("scheduled jobs = %#v, errors = %#v", c.Jobs, jobErrors)
+	}
+
+	if err := os.WriteFile(path, []byte("version: 1\nstorage:\n  local:\n    retention_days: -1\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := LoadScheduled(path); err == nil {
+		t.Fatal("invalid shared config was accepted")
+	}
+	if err := os.WriteFile(path, []byte("version: [invalid\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := LoadScheduled(path); err == nil {
+		t.Fatal("malformed YAML was accepted")
+	}
+}
+
+func TestLoadScheduledAcceptsConfigWithoutJobs(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("version: 1\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	c, jobErrors, err := LoadScheduled(path)
+	if err != nil || len(jobErrors) != 0 || len(c.Jobs) != 0 {
+		t.Fatalf("LoadScheduled() = jobs %#v, job errors %#v, error %v", c.Jobs, jobErrors, err)
+	}
+}
+
+func TestLoadScheduledSkipsAllValidJobsWithDuplicateDrivePaths(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	data := `version: 1
+jobs:
+  - name: one
+    enabled: true
+    driver: sqlite
+    source: host
+    file: /tmp/one.sqlite
+    google_drive_path: team/shared
+  - name: two
+    enabled: true
+    driver: sqlite
+    source: host
+    file: /tmp/two.sqlite
+    google_drive_path: team/shared
+`
+	if err := os.WriteFile(path, []byte(data), 0600); err != nil {
+		t.Fatal(err)
+	}
+	c, jobErrors, err := LoadScheduled(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Jobs) != 0 || len(jobErrors) != 2 {
+		t.Fatalf("scheduled jobs = %#v, errors = %#v; want both conflicting jobs skipped", c.Jobs, jobErrors)
+	}
+}
+
+func TestLoadScheduledSkipsDuplicateEnabledNames(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	data := `version: 1
+jobs:
+  - name: duplicate
+    enabled: true
+    driver: sqlite
+    source: host
+    file: /tmp/one.sqlite
+    google_drive_path: one
+  - name: duplicate
+    enabled: true
+    driver: sqlite
+    source: host
+    file: /tmp/two.sqlite
+    google_drive_path: two
+`
+	if err := os.WriteFile(path, []byte(data), 0600); err != nil {
+		t.Fatal(err)
+	}
+	c, jobErrors, err := LoadScheduled(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Jobs) != 0 || len(jobErrors) != 2 {
+		t.Fatalf("scheduled jobs = %#v, errors = %#v; want both duplicate names skipped", c.Jobs, jobErrors)
+	}
+}
+
 func TestExampleConfigParses(t *testing.T) {
 	path := filepath.Join("..", "..", "configs", "config.example.yaml")
 	c, err := Load(path)

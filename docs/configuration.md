@@ -10,7 +10,7 @@ alldbackup config validate
 alldbackup config list
 ```
 
-Use `sudo nano /etc/alldbackup/secrets.env` for database passwords; that file is root-owned. `sudoedit` may refuse because the config directory is writable so regular users can edit `config.yaml`. See [installation](installation.md#2-files-and-access) for ownership and permissions.
+Use `sudo nano /etc/alldbackup/secrets.env` for database passwords; that file is root-owned. See [installation](installation.md#2-files-and-access) for ownership and permissions.
 
 ## Example YAML
 

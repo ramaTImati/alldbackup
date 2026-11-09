@@ -38,7 +38,7 @@ Run the restore commands in the same shell where you set `BACKUP`, or set `BACKU
 The SQL file contains the database creation/use statements and dump contents. Create a protected client option file for the account that will restore the database:
 
 ```bash
-sudoedit /root/restore.cnf
+sudo nano /root/restore.cnf
 sudo chmod 0600 /root/restore.cnf
 ```
 

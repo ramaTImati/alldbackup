@@ -64,7 +64,7 @@ func Execute() error {
 			return nil
 		},
 	}
-	root.SetHelpTemplate(banner + "\n\n" + cobra.DefaultHelpTemplate)
+	root.SetHelpTemplate(banner + "\n\n" + root.HelpTemplate())
 	root.SetVersionTemplate(banner + "\n\n{{.Name}} {{.Version}}\n")
 	root.PersistentFlags().StringVar(&o.configPath, "config", config.DefaultPath, "configuration file")
 	root.PersistentFlags().BoolVar(&o.verbose, "verbose", false, "enable debug logging")

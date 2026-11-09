@@ -30,7 +30,7 @@ Each job has its own five-field cron schedule. An omitted schedule defaults to `
 For SQL database passwords, set `password_env` to a variable name, then add that `KEY=value` to the protected secrets file:
 
 ```bash
-sudoedit /etc/alldbackup/secrets.env
+sudo nano /etc/alldbackup/secrets.env
 alldbackup config validate
 alldbackup doctor
 ```
@@ -158,7 +158,7 @@ Setiap job memiliki jadwal cron lima kolom. Jika schedule kosong atau tidak ada,
 Untuk password basis data SQL, isi `password_env` dengan nama variabel, lalu tambahkan pasangan `KEY=value` ke file secrets:
 
 ```bash
-sudoedit /etc/alldbackup/secrets.env
+sudo nano /etc/alldbackup/secrets.env
 alldbackup config validate
 alldbackup doctor
 ```

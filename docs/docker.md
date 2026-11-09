@@ -37,7 +37,7 @@ Use the actual container name for `container`. For MySQL/MariaDB/PostgreSQL, all
 Add SQL passwords to the host secrets file:
 
 ```bash
-sudoedit /etc/alldbackup/secrets.env
+sudo nano /etc/alldbackup/secrets.env
 ```
 
 ```dotenv

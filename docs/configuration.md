@@ -10,7 +10,7 @@ alldbackup config validate
 alldbackup config list
 ```
 
-Use `sudoedit /etc/alldbackup/secrets.env` for database passwords; that file is root-owned. See [installation](installation.md#2-files-and-access) for ownership and permissions.
+Use `sudo nano /etc/alldbackup/secrets.env` for database passwords; that file is root-owned. `sudoedit` may refuse because the config directory is writable so regular users can edit `config.yaml`. See [installation](installation.md#2-files-and-access) for ownership and permissions.
 
 ## Example YAML
 
@@ -76,7 +76,7 @@ MYSQL_BACKUP_PASSWORD=replace-with-the-database-password
 Edit the root-owned file with:
 
 ```bash
-sudoedit /etc/alldbackup/secrets.env
+sudo nano /etc/alldbackup/secrets.env
 ```
 
 Use one `KEY=value` per line. Values are read literally after the first `=`; do not add shell quotes or commands. Do not put password values in YAML or process arguments. The installer keeps this file at `root:alldbackup` mode `0640`, readable only by root and the runtime group.

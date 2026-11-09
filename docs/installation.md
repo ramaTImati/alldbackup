@@ -24,7 +24,7 @@ The installer creates an empty default YAML config and credentials files; it doe
 | --- | --- | --- |
 | CLI binary | `/usr/local/bin/alldbackup` | `root:root`, `0755`; installer manages updates |
 | Main YAML | `/etc/alldbackup/config.yaml` | installer account:`alldbackup`, `0644`; edit as the regular account |
-| Database secrets | `/etc/alldbackup/secrets.env` | `root:alldbackup`, `0640`; edit with `sudoedit` |
+| Database secrets | `/etc/alldbackup/secrets.env` | `root:alldbackup`, `0640`; edit with `sudo nano` |
 | Rclone credentials | `/etc/alldbackup/rclone.conf` | installer account:`alldbackup`, `0600`; edit with `alldbackup drive setup` |
 | Config directory | `/etc/alldbackup/` | `root:alldbackup`, `1775` with sticky bit, so the runtime account can update its config |
 | Local backup root | `/var/backups/alldbackup/` | `root:alldbackup`, `2775`; readable by all, writable by the group |
@@ -56,10 +56,10 @@ The installer-created file starts with `jobs: []`. For complete examples, see [`
 
 ## 4. Add database passwords
 
-Edit the root-owned secrets file with `sudoedit`:
+Edit the root-owned secrets file with `sudo nano`:
 
 ```bash
-sudoedit /etc/alldbackup/secrets.env
+sudo nano /etc/alldbackup/secrets.env
 ```
 
 Add the exact variable name entered as `password_env`, one `KEY=value` per line:

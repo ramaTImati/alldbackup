@@ -62,6 +62,8 @@ The installer maintains this root crontab entry inside a managed block:
 * * * * * '/usr/local/bin/alldbackup' --config '/etc/alldbackup/config.yaml' cron tick
 ```
 
+This is one dispatcher line for all jobs. It belongs to root, so `crontab -l` run as a regular user can be empty; check with `sudo crontab -l`. Registering jobs in YAML does not add one crontab line per job.
+
 Inspect root's crontab and the entry that `alldbackup` prints:
 
 ```bash
@@ -70,6 +72,8 @@ alldbackup cron print
 ```
 
 `cron print` prints the dispatcher line once, not one line per job. To reinstall the managed block manually, run `sudo alldbackup cron install`. The installer does this automatically and repeat installs are idempotent. The block update preserves unrelated root crontab lines and removes old alldbackup per-job entries for the default config.
+
+If `alldbackup cron install` is not recognized, the installed binary is an older release with the legacy cron command. Updating the installer script alone does not update the binary; install a binary version that includes the dispatcher before expecting root cron scheduling.
 
 If an older version had a custom `--config` path or entries in your personal crontab, inspect and remove those old entries to prevent duplicate backups:
 

@@ -31,10 +31,7 @@ cat > "$work/fixture/rclone-install.sh" <<'RCLONE_INSTALLER'
 #!/usr/bin/env bash
 set -euo pipefail
 touch "$RCLONE_MARKER"
-cat > "$RCLONE_INSTALL_BIN/rclone" <<'RCLONE'
-#!/bin/sh
-echo "rclone test"
-RCLONE
+printf '%s\n' '#!/bin/sh' 'echo "rclone test"' > "$RCLONE_INSTALL_BIN/rclone"
 chmod 0755 "$RCLONE_INSTALL_BIN/rclone"
 RCLONE_INSTALLER
 
@@ -45,10 +42,14 @@ output=""
 url=""
 while (($#)); do
   case "$1" in
-    -o) output="$2"; shift 2 ;;
-    *) url="$1"; shift ;;
+    --proto) shift 2 ;;
+    --tlsv1.2|-fsSL) shift ;;
+    -o|--output) output="$2"; shift 2 ;;
+    https://*) url="$1"; shift ;;
+    *) shift ;;
   esac
 done
+[[ -n "$url" && -n "$output" ]] || { echo "curl mock did not receive a URL and output path" >&2; exit 2; }
 file="${url##*/}"
 if [[ "$url" == "https://rclone.org/install.sh" ]]; then
   cp "${FIXTURE_DIR}/rclone-install.sh" "$output"

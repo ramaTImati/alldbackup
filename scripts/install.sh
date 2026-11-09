@@ -163,7 +163,7 @@ install -m 0755 "$workdir/alldbackup" "$install_path"
 if ! command -v rclone >/dev/null 2>&1; then
   echo "Rclone is missing; installing it with the official installer..." >&2
   curl --proto '=https' --tlsv1.2 -fsSL https://rclone.org/install.sh -o "$workdir/rclone-install.sh"
-  bash "$workdir/rclone-install.sh"
+  bash "$workdir/rclone-install.sh" || die "Rclone installer failed"
   command -v rclone >/dev/null 2>&1 || die "Rclone installer completed, but rclone is still not available on PATH"
 fi
 

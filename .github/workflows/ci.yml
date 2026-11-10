@@ -21,6 +21,7 @@ jobs:
       - run: go test ./...
       - run: go vet ./...
       - run: bash -n scripts/install.sh tests/installer.sh
-      - run: bash tests/installer.sh
+      - run: |
+          PS4='+${BASH_SOURCE}:${LINENO}: ' bash -x tests/installer.sh
       - run: GOOS=linux GOARCH=amd64 go build ./cmd/alldbackup
       - run: GOOS=linux GOARCH=arm64 go build ./cmd/alldbackup

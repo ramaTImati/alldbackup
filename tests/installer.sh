@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+host_os="$(uname -s)"
+if [[ "$host_os" != "Linux" ]]; then
+  echo "Skipping installer test: Unix permission bits require Linux (found $host_os)" >&2
+  exit 0
+fi
+
 root="$(cd "$(dirname "$0")/.." && pwd)"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT

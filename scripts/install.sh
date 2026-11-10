@@ -156,6 +156,9 @@ if [[ -e "$backup_dir/.locks" || -L "$backup_dir/.locks" ]]; then
     find "$backup_dir/.locks" -xdev -type f -exec chmod 0660 {} +
   fi
 fi
+if [[ -d "$backup_dir/.scheduler" && ! -L "$backup_dir/.scheduler" ]]; then
+  chmod 0700 "$backup_dir/.scheduler"
+fi
 
 install -d "$(dirname "$install_path")"
 install -m 0755 "$workdir/alldbackup" "$install_path"

@@ -1,10 +1,16 @@
-<p align="center">
-  <img src="assets/alldbackup-banner.png" alt="alldbackup — Back up databases to local storage and Google Drive">
-</p>
+<div align="center"><pre>
+ .-.   _     _     ___  |__    .-.   ___  |  /  |   | |__
+/ _ \ | |   | |   |   \ |  \  / _ \ / __| | /   |   |   |
+| |_| | |   | |   |   | |__/  | |_| | |   |&lt;    |   | |__/
+|  _| | |   | |   |   | |  \  |  _| | |__ | \   |   | |
+|_|   |_|   |_|   |___/ |__/  |_|   \___| |  \  \___/ |
+</pre></div>
 
 <p align="center">
   <a href="https://github.com/ramaTImati/alldbackup/releases/latest"><img src="https://img.shields.io/github/v/release/ramaTImati/alldbackup" alt="Latest release"></a>
 </p>
+
+<p align="center">Back up databases to local storage and Google Drive</p>
 
 <p align="center"><strong>Languages:</strong> English · <a href="README.id.md">Bahasa Indonesia</a></p>
 

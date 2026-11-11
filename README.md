@@ -1,8 +1,12 @@
-# alldbackup
+<p align="center">
+  <img src="assets/alldbackup-banner.png" alt="alldbackup — Back up databases to local storage and Google Drive">
+</p>
 
-[![Latest release](https://img.shields.io/github/v/release/ramaTImati/alldbackup)](https://github.com/ramaTImati/alldbackup/releases/latest)
+<p align="center">
+  <a href="https://github.com/ramaTImati/alldbackup/releases/latest"><img src="https://img.shields.io/github/v/release/ramaTImati/alldbackup" alt="Latest release"></a>
+</p>
 
-**Languages:** English · [Bahasa Indonesia](README.id.md)
+<p align="center"><strong>Languages:</strong> English · <a href="README.id.md">Bahasa Indonesia</a></p>
 
 alldbackup is a Linux command-line tool for scheduled backups of MySQL, MariaDB, PostgreSQL, and SQLite databases from a host or Docker container. Each archive is a ZIP containing the database dump and metadata, with a separate SHA-256 checksum. Backups can be stored locally and optionally uploaded to Google Drive.
 

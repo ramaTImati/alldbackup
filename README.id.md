@@ -1,8 +1,12 @@
-# alldbackup
+<p align="center">
+  <img src="assets/alldbackup-banner.png" alt="alldbackup — Back up databases to local storage and Google Drive">
+</p>
 
-[![Rilis terbaru](https://img.shields.io/github/v/release/ramaTImati/alldbackup)](https://github.com/ramaTImati/alldbackup/releases/latest)
+<p align="center">
+  <a href="https://github.com/ramaTImati/alldbackup/releases/latest"><img src="https://img.shields.io/github/v/release/ramaTImati/alldbackup" alt="Rilis terbaru"></a>
+</p>
 
-**Bahasa:** [English](README.md) · Bahasa Indonesia
+<p align="center"><strong>Bahasa:</strong> <a href="README.md">English</a> · Bahasa Indonesia</p>
 
 alldbackup adalah CLI Linux untuk backup terjadwal basis data MySQL, MariaDB, PostgreSQL, dan SQLite dari host atau container Docker. Setiap arsip ZIP berisi dump basis data dan metadata, disertai checksum SHA-256 terpisah. Backup dapat disimpan secara lokal dan, jika diaktifkan, diunggah ke Google Drive.
 

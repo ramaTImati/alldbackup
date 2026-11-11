@@ -4,11 +4,15 @@ The system-wide YAML file is `/etc/alldbackup/config.yaml`. The installer create
 
 ```bash
 alldbackup config add
+alldbackup config edit production
+alldbackup config delete production
 # or edit directly:
 nano /etc/alldbackup/config.yaml
 alldbackup config validate
 alldbackup config list
 ```
+
+`config edit NAME` prompts with the job's current values as defaults. `config delete NAME` removes the job from YAML only; it leaves existing backups in local storage and Google Drive.
 
 Use `sudo nano /etc/alldbackup/secrets.env` for database passwords; that file is root-owned. See [installation](installation.md#2-files-and-access) for ownership and permissions.
 

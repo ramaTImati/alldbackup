@@ -130,7 +130,13 @@ For details, see [cron scheduling](cron.md). `cron install` and `cron remove` op
 
 ## Upgrade
 
-Run the same installer again. It downloads the latest release, verifies its checksum, updates the binary, migrates default directory permissions, and idempotently updates the root cron block:
+For a routine Linux binary update, use the built-in command. It downloads the latest release, verifies its checksum, and replaces only the binary:
+
+```bash
+sudo alldbackup update
+```
+
+Run the installer when you need its directory-permission or root cron migrations. It also updates the binary:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ramaTImati/alldbackup/main/scripts/install.sh -o /tmp/alldbackup-install.sh
@@ -149,19 +155,10 @@ An existing account may need to log out and back in after an installer run if it
 
 ## Uninstall
 
-Remove the root dispatcher and binary:
+Run the uninstall command as root to remove the binary, root dispatcher, and config directory (including YAML, secrets, and Rclone credentials):
 
 ```bash
-sudo alldbackup cron remove
-sudo rm -f /usr/local/bin/alldbackup
+sudo alldbackup uninstall
 ```
 
-This keeps the cron package, Rclone, config, credentials, local archives, and Google Drive files. It also leaves the `alldbackup` group in place. To remove only this account's group membership, run `sudo gpasswd -d "$USER" alldbackup`; remove the group only if no other account or service uses it.
-
-To erase the default local configuration and backup files, inspect them first and then remove them explicitly:
-
-```bash
-sudo rm -ri /etc/alldbackup /var/backups/alldbackup
-```
-
-This deletes database passwords, Rclone OAuth credentials, and local database backups. It does not delete Google Drive files. If YAML uses custom paths, inspect and remove those separately only when you are sure the directories contain no unrelated data.
+The uninstall command keeps local backup files and Google Drive files. It leaves the cron and Rclone packages, the `alldbackup` group, and config files outside `/etc/alldbackup` in place. If the configuration is invalid or the configured local backup path resolves inside `/etc/alldbackup`, uninstall stops so the backup data is not removed; fix the config or move the backups first. Custom config files outside the default config directory must be removed separately if desired.

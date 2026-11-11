@@ -446,6 +446,38 @@ func AddJob(path string, job Job) error {
 	}
 	job.Enabled = true
 	c.Jobs = append(c.Jobs, job)
+	return saveJobs(path, c)
+}
+
+func UpdateJob(path, name string, job Job) error {
+	c, err := Load(path)
+	if err != nil {
+		return err
+	}
+	for i := range c.Jobs {
+		if c.Jobs[i].Name == name {
+			c.Jobs[i] = job
+			return saveJobs(path, c)
+		}
+	}
+	return fmt.Errorf("job %q was not found", name)
+}
+
+func DeleteJob(path, name string) error {
+	c, err := Load(path)
+	if err != nil {
+		return err
+	}
+	for i := range c.Jobs {
+		if c.Jobs[i].Name == name {
+			c.Jobs = append(c.Jobs[:i], c.Jobs[i+1:]...)
+			return saveJobs(path, c)
+		}
+	}
+	return fmt.Errorf("job %q was not found", name)
+}
+
+func saveJobs(path string, c Config) error {
 	c.applyJobDefaults()
 	if err := c.Validate(); err != nil {
 		return err

@@ -21,6 +21,7 @@ import (
 	"github.com/ramaTImati/alldbackup/internal/database"
 	"github.com/ramaTImati/alldbackup/internal/scheduler"
 	"github.com/ramaTImati/alldbackup/internal/storage"
+	"github.com/ramaTImati/alldbackup/internal/updater"
 	"github.com/spf13/cobra"
 )
 
@@ -69,7 +70,7 @@ func Execute() error {
 	root.PersistentFlags().StringVar(&o.configPath, "config", config.DefaultPath, "configuration file")
 	root.PersistentFlags().BoolVar(&o.verbose, "verbose", false, "enable debug logging")
 	root.PersistentFlags().BoolVar(&o.quiet, "quiet", false, "show errors only")
-	root.AddCommand(initCommand(o), configCommand(o), runCommand(o), cleanCommand(o), cronCommand(o), doctorCommand(o), driveCommand(o), verifyCommand(), versionCommand())
+	root.AddCommand(initCommand(o), configCommand(o), runCommand(o), cleanCommand(o), cronCommand(o), doctorCommand(o), driveCommand(o), verifyCommand(), updateCommand(), uninstallCommand(o), versionCommand())
 	return root.Execute()
 }
 
@@ -173,6 +174,8 @@ func configCommand(o *options) *cobra.Command {
 			return nil
 		}},
 		addJobCommand(o),
+		editJobCommand(o),
+		deleteJobCommand(o),
 	)
 	return command
 }
@@ -192,85 +195,147 @@ func addJobCommand(o *options) *cobra.Command {
 				return err
 			}
 		}
-		reader := bufio.NewReader(os.Stdin)
-		var job config.Job
-		if job.Name, err = prompt(reader, "Job name (lowercase letters, digits, _ and -)", ""); err != nil {
-			return err
-		}
-		if job.Driver, err = prompt(reader, "Driver (mysql/mariadb/postgres/sqlite)", "mysql"); err != nil {
-			return err
-		}
-		if job.Source, err = prompt(reader, "Source (host/docker)", "host"); err != nil {
-			return err
-		}
-		if job.Driver == "sqlite" {
-			if job.Source == "docker" {
-				if job.Container, err = prompt(reader, "Docker container", ""); err != nil {
-					return err
-				}
-			}
-			if job.File, err = prompt(reader, "SQLite file path", ""); err != nil {
-				return err
-			}
-		} else {
-			if job.Database, err = prompt(reader, "Database name", ""); err != nil {
-				return err
-			}
-			if job.Username, err = prompt(reader, "Database username", ""); err != nil {
-				return err
-			}
-			if job.PasswordEnv, err = prompt(reader, "Password environment variable", ""); err != nil {
-				return err
-			}
-			if job.Source == "docker" {
-				if job.Container, err = prompt(reader, "Docker container", ""); err != nil {
-					return err
-				}
-			} else {
-				if job.Host, err = prompt(reader, "Database host", "127.0.0.1"); err != nil {
-					return err
-				}
-				defaultPort := "3306"
-				if job.Driver == "postgres" {
-					defaultPort = "5432"
-				}
-				port, e := prompt(reader, "Database port", defaultPort)
-				if e != nil {
-					return e
-				}
-				if job.Port, err = strconv.Atoi(port); err != nil {
-					return fmt.Errorf("invalid port %q", port)
-				}
-			}
-		}
-		job.Schedule.Interval, err = prompt(reader, "Backup interval (whole hours or days, e.g. 1h, 1d, 7d)", config.DefaultJobInterval)
+		defaults := config.Job{Enabled: true, Driver: "mysql", Source: "host", Host: "127.0.0.1", Port: 3306, Schedule: config.DefaultSchedule()}
+		job, err := promptJob(bufio.NewReader(os.Stdin), defaults)
 		if err != nil {
 			return err
 		}
-		hourAt, err := prompt(reader, "Hour at (0-23, server local time)", "0")
-		if err != nil {
-			return err
-		}
-		if job.Schedule.HourAt, err = strconv.Atoi(hourAt); err != nil {
-			return fmt.Errorf("invalid schedule hour %q", hourAt)
-		}
-		minuteAt, err := prompt(reader, "Minute at (0, 15, 30, or 45)", "0")
-		if err != nil {
-			return err
-		}
-		if job.Schedule.MinuteAt, err = strconv.Atoi(minuteAt); err != nil {
-			return fmt.Errorf("invalid schedule minute %q", minuteAt)
-		}
-		if job.GoogleDrivePath, err = prompt(reader, "Google Drive path (relative to storage.google_drive.remote)", job.Name); err != nil {
-			return err
-		}
-		job.Enabled = true
 		if err := config.AddJob(o.configPath, job); err != nil {
 			return err
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "Added job %s\n", job.Name)
 		return nil
 	}}
+}
+
+func editJobCommand(o *options) *cobra.Command {
+	return &cobra.Command{Use: "edit NAME", Short: "Interactively edit a backup job", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		if info, err := os.Stdin.Stat(); err != nil || info.Mode()&os.ModeCharDevice == 0 {
+			return errors.New("config edit requires an interactive terminal")
+		}
+		c, err := load(o)
+		if err != nil {
+			return err
+		}
+		job, ok := c.FindJob(args[0])
+		if !ok {
+			return fmt.Errorf("job %q was not found", args[0])
+		}
+		reader := bufio.NewReader(os.Stdin)
+		updated, err := promptJob(reader, job)
+		if err != nil {
+			return err
+		}
+		enabled, err := prompt(reader, "Enabled (true/false)", strconv.FormatBool(job.Enabled))
+		if err != nil {
+			return err
+		}
+		if updated.Enabled, err = strconv.ParseBool(enabled); err != nil {
+			return fmt.Errorf("invalid enabled value %q", enabled)
+		}
+		if err := config.UpdateJob(o.configPath, job.Name, updated); err != nil {
+			return err
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Updated job %s\n", updated.Name)
+		return nil
+	}}
+}
+
+func deleteJobCommand(o *options) *cobra.Command {
+	return &cobra.Command{Use: "delete NAME", Short: "Remove a job from configuration (keeps its backups)", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		if err := config.DeleteJob(o.configPath, args[0]); err != nil {
+			return err
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Deleted job %s; existing backups were kept\n", args[0])
+		return nil
+	}}
+}
+
+func promptJob(reader *bufio.Reader, defaults config.Job) (config.Job, error) {
+	var job config.Job
+	var err error
+	if job.Name, err = prompt(reader, "Job name (lowercase letters, digits, _ and -)", defaults.Name); err != nil {
+		return job, err
+	}
+	if job.Driver, err = prompt(reader, "Driver (mysql/mariadb/postgres/sqlite)", defaults.Driver); err != nil {
+		return job, err
+	}
+	if job.Source, err = prompt(reader, "Source (host/docker)", defaults.Source); err != nil {
+		return job, err
+	}
+	if job.Driver == "sqlite" {
+		if job.Source == "docker" {
+			if job.Container, err = prompt(reader, "Docker container", defaults.Container); err != nil {
+				return job, err
+			}
+		}
+		if job.File, err = prompt(reader, "SQLite file path", defaults.File); err != nil {
+			return job, err
+		}
+	} else {
+		if job.Database, err = prompt(reader, "Database name", defaults.Database); err != nil {
+			return job, err
+		}
+		if job.Username, err = prompt(reader, "Database username", defaults.Username); err != nil {
+			return job, err
+		}
+		if job.PasswordEnv, err = prompt(reader, "Password environment variable", defaults.PasswordEnv); err != nil {
+			return job, err
+		}
+		if job.Source == "docker" {
+			if job.Container, err = prompt(reader, "Docker container", defaults.Container); err != nil {
+				return job, err
+			}
+		} else {
+			host := defaults.Host
+			if host == "" || defaults.Source != "host" {
+				host = "127.0.0.1"
+			}
+			if job.Host, err = prompt(reader, "Database host", host); err != nil {
+				return job, err
+			}
+			port := defaults.Port
+			if defaults.Driver != job.Driver || port == 0 {
+				port = 3306
+				if job.Driver == "postgres" {
+					port = 5432
+				}
+			}
+			value, promptErr := prompt(reader, "Database port", strconv.Itoa(port))
+			if promptErr != nil {
+				return job, promptErr
+			}
+			if job.Port, err = strconv.Atoi(value); err != nil {
+				return job, fmt.Errorf("invalid port %q", value)
+			}
+		}
+	}
+	job.Schedule.Interval, err = prompt(reader, "Backup interval (whole hours or days, e.g. 1h, 1d, 7d)", defaults.Schedule.Interval)
+	if err != nil {
+		return job, err
+	}
+	hourAt, err := prompt(reader, "Hour at (0-23, server local time)", strconv.Itoa(defaults.Schedule.HourAt))
+	if err != nil {
+		return job, err
+	}
+	if job.Schedule.HourAt, err = strconv.Atoi(hourAt); err != nil {
+		return job, fmt.Errorf("invalid schedule hour %q", hourAt)
+	}
+	minuteAt, err := prompt(reader, "Minute at (0, 15, 30, or 45)", strconv.Itoa(defaults.Schedule.MinuteAt))
+	if err != nil {
+		return job, err
+	}
+	if job.Schedule.MinuteAt, err = strconv.Atoi(minuteAt); err != nil {
+		return job, fmt.Errorf("invalid schedule minute %q", minuteAt)
+	}
+	drivePath := defaults.GoogleDrivePath
+	if drivePath == "" || (defaults.GoogleDrivePath == defaults.Name && job.Name != defaults.Name) {
+		drivePath = job.Name
+	}
+	if job.GoogleDrivePath, err = prompt(reader, "Google Drive path (relative to storage.google_drive.remote)", drivePath); err != nil {
+		return job, err
+	}
+	return job, nil
 }
 
 func prompt(reader *bufio.Reader, label, fallback string) (string, error) {
@@ -703,6 +768,93 @@ func versionCommand() *cobra.Command {
 	return &cobra.Command{Use: "version", Short: "Print version", Args: cobra.NoArgs, Run: func(cmd *cobra.Command, args []string) {
 		fmt.Fprintln(cmd.OutOrStdout(), banner)
 		fmt.Fprintf(cmd.OutOrStdout(), "alldbackup %s\n", Version)
+	}}
+}
+
+func updateCommand() *cobra.Command {
+	return &cobra.Command{Use: "update", Short: "Update the binary to the latest release", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
+		tag, updated, err := updater.Update(cmd.Context(), Version)
+		if err != nil {
+			return err
+		}
+		if updated {
+			fmt.Fprintf(cmd.OutOrStdout(), "Updated alldbackup to %s\n", tag)
+		} else {
+			fmt.Fprintf(cmd.OutOrStdout(), "alldbackup %s is already up to date\n", Version)
+		}
+		return nil
+	}}
+}
+
+func uninstallCommand(o *options) *cobra.Command {
+	return &cobra.Command{Use: "uninstall", Short: "Remove alldbackup and its configuration while keeping backups", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
+		if os.Geteuid() != 0 {
+			return errors.New("run uninstall with sudo")
+		}
+		if filepath.Clean(o.configPath) != filepath.Clean(config.DefaultPath) {
+			return fmt.Errorf("uninstall only supports the default configuration at %s", config.DefaultPath)
+		}
+
+		configDir := filepath.Dir(config.DefaultPath)
+		if info, err := os.Lstat(configDir); err == nil {
+			if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+				return fmt.Errorf("refusing to remove invalid configuration path %q", configDir)
+			}
+			if _, err := os.Stat(config.DefaultPath); err == nil {
+				c, err := config.Load(config.DefaultPath)
+				if err != nil {
+					return fmt.Errorf("cannot safely uninstall with an invalid configuration: %w", err)
+				}
+				backupDir, err := filepath.Abs(c.Storage.Local.Path)
+				if err != nil {
+					return fmt.Errorf("resolve backup path: %w", err)
+				}
+				if resolved, err := filepath.EvalSymlinks(backupDir); err == nil {
+					backupDir = resolved
+				} else if !errors.Is(err, os.ErrNotExist) {
+					return fmt.Errorf("resolve backup path: %w", err)
+				}
+				configRoot, err := filepath.Abs(configDir)
+				if err != nil {
+					return fmt.Errorf("resolve configuration path: %w", err)
+				}
+				relative, err := filepath.Rel(configRoot, backupDir)
+				if err != nil {
+					return fmt.Errorf("compare backup and configuration paths: %w", err)
+				}
+				if relative == "." || (relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))) {
+					return errors.New("configured backup path is inside /etc/alldbackup; move backups before uninstalling to keep them")
+				}
+			} else if !errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("inspect configuration file: %w", err)
+			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("inspect configuration directory: %w", err)
+		}
+
+		binary, err := os.Executable()
+		if err != nil {
+			return fmt.Errorf("resolve alldbackup executable: %w", err)
+		}
+		binary, err = filepath.Abs(binary)
+		if err != nil {
+			return err
+		}
+		configPath, err := filepath.Abs(config.DefaultPath)
+		if err != nil {
+			return err
+		}
+		if err := updateCrontab(binary, configPath, false); err != nil {
+			return fmt.Errorf("remove alldbackup cron dispatcher: %w", err)
+		}
+		if err := os.RemoveAll(configDir); err != nil {
+			return fmt.Errorf("remove configuration directory %q: %w", configDir, err)
+		}
+		if err := os.Remove(binary); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("remove executable %q: %w", binary, err)
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), "Uninstalled alldbackup; configuration and cron dispatcher were removed, local backups were kept")
+		return nil
 	}}
 }
 

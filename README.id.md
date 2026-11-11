@@ -1,10 +1,4 @@
-<div align="center"><pre>
- .-.   _     _     ___  |__    .-.   ___  |  /  |   | |__
-/ _ \ | |   | |   |   \ |  \  / _ \ / __| | /   |   |   |
-| |_| | |   | |   |   | |__/  | |_| | |   |&lt;    |   | |__/
-|  _| | |   | |   |   | |  \  |  _| | |__ | \   |   | |
-|_|   |_|   |_|   |___/ |__/  |_|   \___| |  \  \___/ |
-</pre></div>
+<p align="center"><img src="assets/alldbackup-logo.png" alt="alldbackup ASCII logo"></p>
 
 <p align="center">
   <a href="https://github.com/ramaTImati/alldbackup/releases/latest"><img src="https://img.shields.io/github/v/release/ramaTImati/alldbackup" alt="Rilis terbaru"></a>

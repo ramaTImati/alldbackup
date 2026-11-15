@@ -33,6 +33,9 @@ func (r *Rclone) Test(ctx context.Context) error {
 	if strings.TrimSpace(r.Config.Remote) == "" {
 		return errors.New("Google Drive remote is not configured")
 	}
+	if err := r.ensureRemoteDir(ctx, r.Config.Remote); err != nil {
+		return fmt.Errorf("Google Drive remote test failed: %w", err)
+	}
 	callCtx, cancel := context.WithTimeout(ctx, mustDuration(r.Config.Timeout))
 	defer cancel()
 	if _, err := r.Exec.Output(callCtx, "rclone", r.args("lsd", r.Config.Remote), nil); err != nil {
@@ -44,7 +47,11 @@ func (r *Rclone) Test(ctx context.Context) error {
 func JobDirectory(root string, job config.Job) string { return filepath.Join(root, job.Name) }
 
 func (r *Rclone) Upload(ctx context.Context, job config.Job, localPath string) error {
-	remote := r.jobRemoteDir(job) + "/" + filepath.Base(localPath)
+	remoteDir := r.jobRemoteDir(job)
+	if err := r.ensureRemoteDir(ctx, remoteDir); err != nil {
+		return err
+	}
+	remote := remoteDir + "/" + filepath.Base(localPath)
 	if err := r.copy(ctx, localPath, remote); err != nil {
 		return err
 	}
@@ -192,6 +199,15 @@ func (r *Rclone) args(args ...string) []string {
 		return args
 	}
 	return append([]string{"--config", r.Config.ConfigFile}, args...)
+}
+
+func (r *Rclone) ensureRemoteDir(ctx context.Context, remoteDir string) error {
+	callCtx, cancel := context.WithTimeout(ctx, mustDuration(r.Config.Timeout))
+	defer cancel()
+	if err := r.Exec.Run(callCtx, "rclone", r.args("mkdir", remoteDir), nil, io.Discard); err != nil {
+		return fmt.Errorf("create Google Drive folder %q: %w", remoteDir, err)
+	}
+	return nil
 }
 
 func (r *Rclone) jobRemoteDir(job config.Job) string {

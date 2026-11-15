@@ -11,7 +11,7 @@ storage:
     enabled: false
     remote: gdrive:alldbackup
     config_file: /etc/alldbackup/rclone.conf
-    retention_days: 30
+    retention_days: 7
     timeout: 30m
     retries: 3
 
@@ -22,7 +22,6 @@ jobs:
       interval: 1d
       hour_at: 2
       minute_at: 0
-    google_drive_path: mysql-host
     driver: mysql
     source: host
     host: 127.0.0.1
@@ -37,7 +36,6 @@ jobs:
       interval: 1d
       hour_at: 2
       minute_at: 15
-    google_drive_path: applications/mariadb
     driver: mariadb
     source: docker
     container: mariadb-server
@@ -51,7 +49,6 @@ jobs:
       interval: 1d
       hour_at: 3
       minute_at: 0
-    google_drive_path: databases/postgres
     driver: postgres
     source: docker
     container: postgres-db
@@ -65,7 +62,6 @@ jobs:
       interval: 1d
       hour_at: 3
       minute_at: 15
-    google_drive_path: files/sqlite-host
     driver: sqlite
     source: host
     file: /srv/application/database.sqlite

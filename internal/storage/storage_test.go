@@ -23,11 +23,20 @@ type fakeExec struct {
 func (f *fakeExec) Run(_ context.Context, name string, args, _ []string, _ io.Writer) error {
 	call := append([]string{name}, args...)
 	f.calls = append(f.calls, call)
-	if f.runFailures > 0 {
+	if f.runFailures > 0 && containsArg(args, "copyto") {
 		f.runFailures--
 		return errors.New("mock rclone failure")
 	}
 	return nil
+}
+
+func containsArg(args []string, value string) bool {
+	for _, arg := range args {
+		if arg == value {
+			return true
+		}
+	}
+	return false
 }
 
 func TestUploadFailureKeepsLocalFilesForRetry(t *testing.T) {
@@ -44,8 +53,8 @@ func TestUploadFailureKeepsLocalFilesForRetry(t *testing.T) {
 	if err := drive.Upload(context.Background(), config.Job{Name: "db"}, path); err == nil {
 		t.Fatal("expected upload failure")
 	}
-	if len(exec.calls) != 2 {
-		t.Fatalf("got %d calls, want two retries", len(exec.calls))
+	if len(exec.calls) != 3 {
+		t.Fatalf("got %d calls, want folder creation plus two upload attempts", len(exec.calls))
 	}
 	for _, file := range []string{path, path + ".sha256"} {
 		if _, err := os.Stat(file); err != nil {
@@ -79,8 +88,8 @@ func TestUploadCopiesAndVerifiesArchiveAndChecksum(t *testing.T) {
 	if err := drive.Upload(context.Background(), config.Job{Name: "db", GoogleDrivePath: "team/finance"}, path); err != nil {
 		t.Fatal(err)
 	}
-	if len(exec.calls) != 4 {
-		t.Fatalf("got %d rclone calls, want 4", len(exec.calls))
+	if len(exec.calls) != 5 {
+		t.Fatalf("got %d rclone calls, want 5", len(exec.calls))
 	}
 	marker, err := os.ReadFile(path + ".uploaded")
 	if err != nil || len(marker) == 0 {
@@ -94,23 +103,29 @@ func TestUploadCopiesAndVerifiesArchiveAndChecksum(t *testing.T) {
 			t.Fatalf("unexpected credential in arguments: %#v", call)
 		}
 	}
-	if got, want := exec.calls[0][len(exec.calls[0])-1], "gdrive:root/team/finance/backup.zip"; got != want {
+	if !containsArg(exec.calls[0], "mkdir") {
+		t.Fatalf("first rclone call did not create the remote folder: %#v", exec.calls[0])
+	}
+	if got, want := exec.calls[0][len(exec.calls[0])-1], "gdrive:root/team/finance"; got != want {
+		t.Fatalf("created remote folder = %q, want %q", got, want)
+	}
+	if got, want := exec.calls[1][len(exec.calls[1])-1], "gdrive:root/team/finance/backup.zip"; got != want {
 		t.Fatalf("uploaded archive remote path = %q, want %q", got, want)
 	}
-	if got, want := exec.calls[1][len(exec.calls[1])-1], "gdrive:root/team/finance"; got != want {
+	if got, want := exec.calls[2][len(exec.calls[2])-1], "gdrive:root/team/finance"; got != want {
 		t.Fatalf("archive verification remote directory = %q, want %q", got, want)
 	}
-	if !strings.Contains(strings.Join(exec.calls[1], " "), "--include backup.zip") {
-		t.Fatalf("archive verification did not filter to backup.zip: %#v", exec.calls[1])
+	if !strings.Contains(strings.Join(exec.calls[2], " "), "--include backup.zip") {
+		t.Fatalf("archive verification did not filter to backup.zip: %#v", exec.calls[2])
 	}
-	if got, want := exec.calls[2][len(exec.calls[2])-1], "gdrive:root/team/finance/backup.zip.sha256"; got != want {
+	if got, want := exec.calls[3][len(exec.calls[3])-1], "gdrive:root/team/finance/backup.zip.sha256"; got != want {
 		t.Fatalf("uploaded checksum remote path = %q, want %q", got, want)
 	}
-	if got, want := exec.calls[3][len(exec.calls[3])-1], "gdrive:root/team/finance"; got != want {
+	if got, want := exec.calls[4][len(exec.calls[4])-1], "gdrive:root/team/finance"; got != want {
 		t.Fatalf("checksum verification remote directory = %q, want %q", got, want)
 	}
-	if !strings.Contains(strings.Join(exec.calls[3], " "), "--include backup.zip.sha256") {
-		t.Fatalf("checksum verification did not filter to backup.zip.sha256: %#v", exec.calls[3])
+	if !strings.Contains(strings.Join(exec.calls[4], " "), "--include backup.zip.sha256") {
+		t.Fatalf("checksum verification did not filter to backup.zip.sha256: %#v", exec.calls[4])
 	}
 }
 

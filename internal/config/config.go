@@ -169,7 +169,7 @@ func Defaults() Config {
 		SecretsFile:       "/etc/alldbackup/secrets.env",
 		Storage: StorageConfig{
 			Local:       LocalConfig{Enabled: true, Path: "/var/backups/alldbackup", RetentionDays: 7},
-			GoogleDrive: DriveConfig{Enabled: false, ConfigFile: "/etc/alldbackup/rclone.conf", RetentionDays: 30, Timeout: "30m", Retries: 3},
+			GoogleDrive: DriveConfig{Enabled: false, ConfigFile: "/etc/alldbackup/rclone.conf", RetentionDays: 7, Timeout: "30m", Retries: 3},
 		},
 	}
 }

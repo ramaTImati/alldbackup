@@ -32,18 +32,17 @@ storage:
     enabled: false
     remote: gdrive:alldbackup
     config_file: /etc/alldbackup/rclone.conf
-    retention_days: 30
+    retention_days: 7
     timeout: 30m
     retries: 3
 
 jobs:
-  - name: production
+  - name: app-production
     enabled: true
     schedule:
       interval: 1d
       hour_at: 2
       minute_at: 0
-    google_drive_path: departments/production
     driver: mysql
     source: host
     host: 127.0.0.1
@@ -52,6 +51,8 @@ jobs:
     username: backup_user
     password_env: MYSQL_BACKUP_PASSWORD
 ```
+
+`remote` uses the Rclone format `<remote-name>:<base-folder>`. In this example, `gdrive` is the remote name created by `alldbackup drive setup`, and `alldbackup` is a folder in Drive. Since `google_drive_path` is omitted, the job folder defaults to its name, so the full path is `gdrive:alldbackup/app-production`. alldbackup creates missing Drive folders automatically.
 
 ## Job settings
 
@@ -62,7 +63,7 @@ Every job needs a unique safe name, `enabled`, `driver`, `source`, and driver-sp
 | `schedule.interval` | No | Whole hours (`1h`, `2h`) or calendar days (`1d`, `3d`, `7d`); minimum `1h`. |
 | `schedule.hour_at` | No | Server-local hour, from `0` to `23`; default `0`. |
 | `schedule.minute_at` | No | One of `0`, `15`, `30`, or `45`; default `0`. |
-| `google_drive_path` | No | Relative path under the configured Rclone remote; defaults to the job name. Use a unique path for each job. |
+| `google_drive_path` | No | Relative path under the configured Rclone remote; defaults to the job name. With `remote: gdrive:alldbackup`, `app-production` defaults to `gdrive:alldbackup/app-production`. Use a unique path for each job. |
 | `driver` | Yes | `mysql`, `mariadb`, `postgres`, or `sqlite`. |
 | `source` | Yes | `host` or `docker`. |
 | `container` | For Docker | Running database container name. |
@@ -111,8 +112,9 @@ Use one `KEY=value` per line. Values are read literally after the first `=`; do 
 | `secrets_file` | `/etc/alldbackup/secrets.env` | Database password values. |
 | `storage.local.path` | `/var/backups/alldbackup` | Local backup root and upload retry spool. Each job uses a subdirectory. |
 | `storage.local.retention_days` | `7` | Remove successfully uploaded/local backups older than this many days; `0` disables local cleanup. |
+| `storage.google_drive.remote` | `gdrive:alldbackup` | `<rclone-remote-name>:<base-folder>`; `gdrive` is the name created during Rclone setup. |
 | `storage.google_drive.config_file` | `/etc/alldbackup/rclone.conf` | Rclone remote OAuth and settings. |
-| `storage.google_drive.retention_days` | `30` | Independent Google Drive retention; `0` disables it. |
+| `storage.google_drive.retention_days` | `7` | Independent Google Drive retention; `0` disables it. |
 
 The system installer prepares default path permissions for root cron and regular-user commands. If you change `storage.local.path`, ensure root cron and the `alldbackup` group can access it; set directories to group-writable with setgid and make completed ZIP/checksum files readable by all users if that is desired.
 

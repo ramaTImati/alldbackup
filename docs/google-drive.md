@@ -72,39 +72,37 @@ storage:
     enabled: true
     remote: gdrive:alldbackup
     config_file: /etc/alldbackup/rclone.conf
-    retention_days: 30
+    retention_days: 7
     timeout: 30m
     retries: 3
 
 jobs:
-  - name: production
-    google_drive_path: teams/finance/production
+  - name: app-production
     # other job fields...
 ~~~
 
-The <code>remote</code> value is the shared base path. Each job's relative <code>google_drive_path</code> selects its folder below that path. In this example, alldbackup uploads:
+The <code>remote</code> value uses the format <code>&lt;remote-name&gt;:&lt;base-folder&gt;</code>. Here, <code>gdrive</code> is the Rclone remote name entered during <code>alldbackup drive setup</code>, and <code>alldbackup</code> is a folder under the Google Drive root. Each job's relative <code>google_drive_path</code> selects a folder under that base. If omitted, it defaults to the job name, so this job uploads to <code>gdrive:alldbackup/app-production</code>:
 
 ~~~text
-gdrive:alldbackup/teams/finance/production/<timestamp>.zip
-gdrive:alldbackup/teams/finance/production/<timestamp>.zip.sha256
+gdrive:alldbackup/app-production/<timestamp>.zip
+gdrive:alldbackup/app-production/<timestamp>.zip.sha256
 ~~~
 
-Each job path must be unique. If omitted, it defaults to the job name. Changing a path affects future uploads and does not move existing files.
+Each job path must be unique. Use a relative path without a leading slash. Changing a path affects future uploads and does not move existing files.
 
-The base remote path must exist before <code>alldbackup drive test</code> can list it. Create it once if necessary:
+The <code>alldbackup drive test</code> command creates the base folder if it is missing, then checks access. The first backup for each job creates its job folder automatically:
 
 ~~~bash
-rclone --config /etc/alldbackup/rclone.conf mkdir gdrive:alldbackup
 alldbackup config validate
 alldbackup drive test
 alldbackup doctor
 ~~~
 
-Replace <code>gdrive</code> with the remote name you chose. Rclone creates each job subfolder during upload.
+Replace <code>gdrive</code> with the remote name you chose. The path is displayed in Drive as <code>alldbackup/app-production</code>.
 
 ## 4. Uploads, retries, and retention
 
-By default, alldbackup creates an archive under /var/backups/alldbackup/<job-name>/, uploads the ZIP and SHA-256 sidecar, then checks the remote copies. A failed upload keeps the local archive for a later retry. Local retention defaults to 7 days; Google Drive retention defaults to 30 days. Set either retention value to 0 to disable automatic cleanup for that storage.
+By default, alldbackup creates an archive under /var/backups/alldbackup/<job-name>/, uploads the ZIP and SHA-256 sidecar, then checks the remote copies. A failed upload keeps the local archive for a later retry. Local and Google Drive retention both default to 7 days. Set either retention value to 0 to disable automatic cleanup for that storage. Existing config files with an explicit `retention_days: 30` keep that value; change it to `7` to use seven-day Drive retention.
 
 Rclone crypt remotes are supported. Configure both the Google Drive remote and a crypt remote in the same file, then set storage.google_drive.remote to the crypt remote path. Rclone handles encryption and credentials.
 

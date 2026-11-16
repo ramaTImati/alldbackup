@@ -58,14 +58,6 @@ func (r *Rclone) Upload(ctx context.Context, job config.Job, localPath string) e
 	if err := r.check(ctx, localPath, remote); err != nil {
 		return fmt.Errorf("verify uploaded archive: %w", err)
 	}
-	sidecar := localPath + ".sha256"
-	remoteSidecar := remote + ".sha256"
-	if err := r.copy(ctx, sidecar, remoteSidecar); err != nil {
-		return err
-	}
-	if err := r.check(ctx, sidecar, remoteSidecar); err != nil {
-		return fmt.Errorf("verify uploaded checksum: %w", err)
-	}
 	if err := os.WriteFile(localPath+".uploaded", []byte(time.Now().UTC().Format(time.RFC3339Nano)+"\n"), 0600); err != nil {
 		return fmt.Errorf("mark backup as uploaded: %w", err)
 	}

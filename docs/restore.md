@@ -2,14 +2,15 @@
 
 By default, a job named `production` stores its ZIP files under `/var/backups/alldbackup/production/`. If `storage.local.path` was changed, look under `<configured-path>/<job-name>/`.
 
-If local storage is disabled, download both the ZIP and its `.sha256` sidecar from Google Drive before verifying. The example assumes the `production` job has `google_drive_path: production`; use that job's configured path if it differs. Replace the timestamp below with the filename shown in the remote:
+Google Drive stores only the ZIP; the SHA-256 sidecar is kept with the local archive and is not uploaded. If restoring from Drive, download the ZIP. This example assumes the `production` job uses its default `google_drive_path: production`; use that job's configured path if it differs. Replace the timestamp below with the filename shown in the remote:
 
 ```bash
 rclone --config /etc/alldbackup/rclone.conf copyto 'gdrive:alldbackup/production/20261106T090000.123456789+0700.zip' /tmp/production.zip
-rclone --config /etc/alldbackup/rclone.conf copyto 'gdrive:alldbackup/production/20261106T090000.123456789+0700.zip.sha256' /tmp/production.zip.sha256
+BACKUP=/tmp/production.zip
+unzip -t "$BACKUP"
 ```
 
-Then set `BACKUP=/tmp/production.zip`. If `storage.google_drive.config_file` uses a custom path, pass that path with Rclone's `--config` option.
+`alldbackup verify` requires the original adjacent `.sha256` sidecar, so it can verify local backups while that sidecar is available. For a Drive-only copy, `unzip -t` checks the ZIP structure; without the original sidecar, it cannot compare the downloaded file with its backup-time SHA-256. If `storage.google_drive.config_file` uses a custom path, pass that path with Rclone's `--config` option.
 
 ## 1. Find and verify a backup
 
@@ -99,4 +100,4 @@ alldbackup clean --job production 20261108T110259.289436409Z.zip
 alldbackup clean --job production --all
 ```
 
-Pass exactly one ZIP basename or `--all`. There is no per-storage selection. Local clean removes ZIPs, `.sha256` sidecars, and `.uploaded` markers, including local retry-spool files when local retention is disabled. Google Drive clean removes ZIPs and `.sha256` sidecars when enabled. The operation is scoped to the named job, ignores unrelated files, and never removes the job folder.
+Pass exactly one ZIP basename or `--all`. There is no per-storage selection. Local clean removes ZIPs, `.sha256` sidecars, and `.uploaded` markers, including local retry-spool files when local retention is disabled. Google Drive clean removes ZIPs and any older `.sha256` sidecars still present. The operation is scoped to the named job, ignores unrelated files, and never removes the job folder.

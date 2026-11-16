@@ -8,7 +8,7 @@
 
 <p align="center"><strong>Languages:</strong> English · <a href="README.id.md">Bahasa Indonesia</a></p>
 
-alldbackup is a Linux command-line tool for scheduled backups of MySQL, MariaDB, PostgreSQL, and SQLite databases from a host or Docker container. Each archive is a ZIP containing the database dump and metadata, with a separate SHA-256 checksum. Backups can be stored locally and optionally uploaded to Google Drive.
+alldbackup is a Linux command-line tool for scheduled backups of MySQL, MariaDB, PostgreSQL, and SQLite databases from a host or Docker container. Each local backup has a ZIP containing the database dump and metadata, plus a separate SHA-256 checksum file. Backups can be stored locally and optionally uploaded to Google Drive.
 
 ## System requirements
 
@@ -92,6 +92,8 @@ alldbackup drive test
 
 Rclone credentials are stored separately at /etc/alldbackup/rclone.conf; the setup does not replace a user's existing Rclone config. See [Google Drive setup](docs/google-drive.md) for remote and OAuth instructions.
 
+Only the backup ZIP is uploaded to Google Drive. The SHA-256 checksum sidecar remains beside the local ZIP.
+
 ## Run jobs, clean backups, and verify archives
 
 Run one enabled job now or run all enabled jobs:
@@ -108,7 +110,7 @@ alldbackup clean --job production 20261109T020000.123456789Z.zip
 alldbackup clean --job production --all
 ~~~
 
-Only alldbackup backup archives and their checksum sidecars are removed. Verify a local archive and its checksum with:
+Cleanup removes alldbackup backup archives and their local checksum sidecars; it also removes corresponding legacy Drive sidecars if present. Verify a local archive and its checksum with:
 
 ~~~bash
 alldbackup verify --file /var/backups/alldbackup/production/20261109T020000.123456789Z.zip
@@ -128,7 +130,7 @@ See [verification and restore](docs/restore.md).
 | Local backups | /var/backups/alldbackup/<job>/ | alldbackup group can write; local users can read |
 | Cron | root's crontab | one dispatcher entry, checked every 15 minutes |
 
-Local retention defaults to 7 days and Google Drive retention to 30 days. Set a storage retention value to 0 to disable automatic cleanup. Backup ZIP files are readable by local users. Docker access is effectively host-root access.
+Local and Google Drive retention default to 7 days. Set a storage retention value to 0 to disable automatic cleanup. Backup ZIP files are readable by local users. Docker access is effectively host-root access.
 
 ## License
 

@@ -8,7 +8,7 @@
 
 <p align="center"><strong>Bahasa:</strong> <a href="README.md">English</a> · Bahasa Indonesia</p>
 
-alldbackup adalah CLI Linux untuk backup terjadwal basis data MySQL, MariaDB, PostgreSQL, dan SQLite dari host atau container Docker. Setiap arsip ZIP berisi dump basis data dan metadata, disertai checksum SHA-256 terpisah. Backup dapat disimpan secara lokal dan, jika diaktifkan, diunggah ke Google Drive.
+alldbackup adalah CLI Linux untuk backup terjadwal basis data MySQL, MariaDB, PostgreSQL, dan SQLite dari host atau container Docker. Setiap backup lokal memiliki file ZIP berisi dump basis data dan metadata, serta file checksum SHA-256 terpisah. Backup dapat disimpan lokal dan, jika diaktifkan, diunggah ke Google Drive.
 
 ## Persyaratan sistem
 
@@ -92,6 +92,8 @@ alldbackup drive test
 
 Kredensial Rclone disimpan terpisah di /etc/alldbackup/rclone.conf; setup ini tidak mengganti konfigurasi Rclone milik user. Lihat [panduan Google Drive](docs/google-drive.md) untuk instruksi remote dan OAuth.
 
+Hanya file ZIP backup yang diunggah ke Google Drive. Sidecar checksum SHA-256 tetap berada di samping ZIP lokal.
+
 ## Jalankan job, bersihkan backup, dan verifikasi arsip
 
 Jalankan satu job aktif sekarang atau jalankan semua job aktif:
@@ -108,7 +110,7 @@ alldbackup clean --job production 20261109T020000.123456789Z.zip
 alldbackup clean --job production --all
 ~~~
 
-Hanya arsip backup alldbackup dan file sidecar checksum-nya yang dihapus. Verifikasi arsip lokal beserta checksum:
+Pembersihan menghapus arsip alldbackup beserta sidecar checksum lokal; sidecar Drive lama yang terkait juga dihapus jika ada. Verifikasi arsip lokal beserta checksum:
 
 ~~~bash
 alldbackup verify --file /var/backups/alldbackup/production/20261109T020000.123456789Z.zip
@@ -128,7 +130,7 @@ Lihat [panduan verifikasi dan restore](docs/restore.md).
 | Backup lokal | /var/backups/alldbackup/<job>/ | grup alldbackup dapat menulis; semua user lokal dapat membaca |
 | Cron | crontab root | satu dispatcher, diperiksa setiap 15 menit |
 
-Retensi lokal default 7 hari dan retensi Google Drive 30 hari. Isi nilai retensi storage dengan 0 untuk menonaktifkan pembersihan otomatis. File ZIP backup dapat dibaca user lokal. Akses Docker setara dengan akses root host.
+Retensi lokal dan Google Drive default 7 hari. Isi nilai retensi storage dengan 0 untuk menonaktifkan pembersihan otomatis. File ZIP backup dapat dibaca user lokal. Akses Docker setara dengan akses root host.
 
 ## Lisensi
 

@@ -111,7 +111,7 @@ For the default local path, a job named `production` writes its files to:
 └── 20261109T020000.123456789Z.zip.sha256
 ```
 
-Each ZIP contains `backup.sql` or `database.sqlite` and `metadata.json`. Local retention defaults to 7 days and Google Drive retention to 30 days; set either value to `0` to disable its automatic cleanup. Verify a ZIP with `alldbackup verify --file /path/to/file.zip`.
+Each ZIP contains `backup.sql` or `database.sqlite` and `metadata.json`. Local and Google Drive retention default to 7 days; set either value to `0` to disable its automatic cleanup. Google Drive stores ZIP files only; SHA-256 sidecars remain local. Verify a local ZIP with `alldbackup verify --file /path/to/file.zip` while its sidecar is available.
 
 ## 7. Automatic schedule
 

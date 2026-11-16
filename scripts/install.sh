@@ -113,7 +113,7 @@ storage:
     enabled: false
     remote: ""
     config_file: /etc/alldbackup/rclone.conf
-    retention_days: 30
+    retention_days: 7
     timeout: 30m
     retries: 3
 jobs: []

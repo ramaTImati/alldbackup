@@ -74,7 +74,7 @@ func (f *fakeExec) Output(_ context.Context, name string, args, _ []string) (str
 	return "", nil
 }
 
-func TestUploadCopiesAndVerifiesArchiveAndChecksum(t *testing.T) {
+func TestUploadCopiesAndVerifiesArchiveOnly(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "backup.zip")
 	if err := os.WriteFile(path, []byte("zip"), 0600); err != nil {
@@ -88,8 +88,8 @@ func TestUploadCopiesAndVerifiesArchiveAndChecksum(t *testing.T) {
 	if err := drive.Upload(context.Background(), config.Job{Name: "db", GoogleDrivePath: "team/finance"}, path); err != nil {
 		t.Fatal(err)
 	}
-	if len(exec.calls) != 5 {
-		t.Fatalf("got %d rclone calls, want 5", len(exec.calls))
+	if len(exec.calls) != 3 {
+		t.Fatalf("got %d rclone calls, want folder creation, archive upload, and archive verification", len(exec.calls))
 	}
 	marker, err := os.ReadFile(path + ".uploaded")
 	if err != nil || len(marker) == 0 {
@@ -117,15 +117,6 @@ func TestUploadCopiesAndVerifiesArchiveAndChecksum(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(exec.calls[2], " "), "--include backup.zip") {
 		t.Fatalf("archive verification did not filter to backup.zip: %#v", exec.calls[2])
-	}
-	if got, want := exec.calls[3][len(exec.calls[3])-1], "gdrive:root/team/finance/backup.zip.sha256"; got != want {
-		t.Fatalf("uploaded checksum remote path = %q, want %q", got, want)
-	}
-	if got, want := exec.calls[4][len(exec.calls[4])-1], "gdrive:root/team/finance"; got != want {
-		t.Fatalf("checksum verification remote directory = %q, want %q", got, want)
-	}
-	if !strings.Contains(strings.Join(exec.calls[4], " "), "--include backup.zip.sha256") {
-		t.Fatalf("checksum verification did not filter to backup.zip.sha256: %#v", exec.calls[4])
 	}
 }
 

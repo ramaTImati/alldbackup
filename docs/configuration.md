@@ -52,7 +52,7 @@ jobs:
     password_env: MYSQL_BACKUP_PASSWORD
 ```
 
-`remote` uses the Rclone format `<remote-name>:<base-folder>`. In this example, `gdrive` is the remote name created by `alldbackup drive setup`, and `alldbackup` is a folder in Drive. Since `google_drive_path` is omitted, the job folder defaults to its name, so the full path is `gdrive:alldbackup/app-production`. alldbackup creates missing Drive folders automatically.
+`remote` must use the format `<nama-remote-rclone>:<folder>`. For example, in `gdrive:alldbackup`, `gdrive` is the remote name created by `alldbackup drive setup`, and `alldbackup` is a folder in Drive. Since `google_drive_path` is omitted, the job folder defaults to its name, so the full path is `gdrive:alldbackup/app-production`. alldbackup creates missing Drive folders automatically.
 
 ## Job settings
 
@@ -112,7 +112,7 @@ Use one `KEY=value` per line. Values are read literally after the first `=`; do 
 | `secrets_file` | `/etc/alldbackup/secrets.env` | Database password values. |
 | `storage.local.path` | `/var/backups/alldbackup` | Local backup root and upload retry spool. Each job uses a subdirectory. |
 | `storage.local.retention_days` | `7` | Remove successfully uploaded/local backups older than this many days; `0` disables local cleanup. |
-| `storage.google_drive.remote` | `gdrive:alldbackup` | `<rclone-remote-name>:<base-folder>`; `gdrive` is the name created during Rclone setup. |
+| `storage.google_drive.remote` | `gdrive:alldbackup` | `<nama-remote-rclone>:<folder>`; `gdrive` is the name created during Rclone setup. |
 | `storage.google_drive.config_file` | `/etc/alldbackup/rclone.conf` | Rclone remote OAuth and settings. |
 | `storage.google_drive.retention_days` | `7` | Independent Google Drive retention; `0` disables it. |
 

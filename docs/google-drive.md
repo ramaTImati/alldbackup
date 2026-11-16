@@ -81,7 +81,7 @@ jobs:
     # other job fields...
 ~~~
 
-The <code>remote</code> value uses the format <code>&lt;remote-name&gt;:&lt;base-folder&gt;</code>. Here, <code>gdrive</code> is the Rclone remote name entered during <code>alldbackup drive setup</code>, and <code>alldbackup</code> is a folder under the Google Drive root. Each job's relative <code>google_drive_path</code> selects a folder under that base. If omitted, it defaults to the job name, so this job uploads to <code>gdrive:alldbackup/app-production</code>:
+The <code>remote</code> value must use the format <code>&lt;nama-remote-rclone&gt;:&lt;folder&gt;</code>. For example, <code>gdrive:alldbackup</code> uses <code>gdrive</code> as the Rclone remote name entered during <code>alldbackup drive setup</code>, and <code>alldbackup</code> as a folder under the Google Drive root. Each job's relative <code>google_drive_path</code> selects a folder under that base. If omitted, it defaults to the job name, so this job uploads to <code>gdrive:alldbackup/app-production</code>:
 
 ~~~text
 gdrive:alldbackup/app-production/<timestamp>.zip

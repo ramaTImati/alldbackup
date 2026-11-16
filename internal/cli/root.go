@@ -749,7 +749,7 @@ func driveCommand(o *options) *cobra.Command {
 
 func verifyCommand() *cobra.Command {
 	var path string
-	command := &cobra.Command{Use: "verify", Short: "Verify a backup ZIP and its checksum", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
+	command := &cobra.Command{Use: "verify", Short: "Verify a backup ZIP and its metadata", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
 		if path == "" {
 			return errors.New("--file is required")
 		}

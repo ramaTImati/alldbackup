@@ -116,7 +116,7 @@ Use one `KEY=value` per line. Values are read literally after the first `=`; do 
 | `storage.google_drive.config_file` | `/etc/alldbackup/rclone.conf` | Rclone remote OAuth and settings. |
 | `storage.google_drive.retention_days` | `7` | Independent Google Drive retention; `0` disables it. |
 
-The system installer prepares default path permissions for root cron and regular-user commands. If you change `storage.local.path`, ensure root cron and the `alldbackup` group can access it; set directories to group-writable with setgid and make completed ZIP/checksum files readable by all users if that is desired.
+The system installer prepares default path permissions for root cron and regular-user commands. If you change `storage.local.path`, ensure root cron and the `alldbackup` group can access it; set directories to group-writable with setgid and make completed ZIP files readable by all users if that is desired.
 
 If you use `alldbackup --config /path/to/config.yaml init`, relative `secrets_file`, local backup, and Rclone config paths are resolved relative to the YAML directory. Pass the same `--config` option to all commands. The system-installed root dispatcher uses `/etc/alldbackup/config.yaml`; custom configs need a separate manually managed dispatcher entry.
 

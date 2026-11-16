@@ -343,7 +343,7 @@ func Pending(root string, job config.Job) ([]string, error) {
 			continue
 		}
 		path := filepath.Join(dir, name)
-		if !regularFile(path) || !regularFile(path+".sha256") {
+		if !regularFile(path) {
 			continue
 		}
 		if regularFile(path + ".uploaded") {

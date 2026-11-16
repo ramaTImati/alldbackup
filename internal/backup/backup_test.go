@@ -81,8 +81,8 @@ func TestRunContinuesAfterJobFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 2 {
-		t.Fatalf("expected ZIP and checksum, got %d files", len(entries))
+	if len(entries) != 1 {
+		t.Fatalf("expected ZIP only, got %d files", len(entries))
 	}
 	var zipPath string
 	for _, entry := range entries {

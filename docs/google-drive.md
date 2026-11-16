@@ -1,6 +1,6 @@
 # Google Drive setup with Rclone
 
-alldbackup uses Rclone to upload backup ZIP files to Google Drive. The SHA-256 sidecar remains beside the local ZIP and is not uploaded. The installer installs the Rclone program if it is missing, but it does not create a remote or authorize a Google account.
+alldbackup uses Rclone to upload backup ZIP files to Google Drive. It does not create separate SHA-256 sidecar files. The installer installs the Rclone program if it is missing, but it does not create a remote or authorize a Google account.
 
 The dedicated Rclone configuration is <code>/etc/alldbackup/rclone.conf</code>. It contains OAuth client credentials and refresh tokens, is owned by the account that installed alldbackup, and has mode <code>0600</code>. It does not replace the account's usual Rclone configuration.
 
@@ -101,7 +101,7 @@ Replace <code>gdrive</code> with the remote name you chose. The path is displaye
 
 ## 4. Uploads, retries, and retention
 
-By default, alldbackup creates an archive and its SHA-256 sidecar under /var/backups/alldbackup/<job-name>/, uploads only the ZIP, then checks the remote ZIP against the local archive. The sidecar stays local for `alldbackup verify`. A failed upload keeps the local files for a later retry. Local and Google Drive retention both default to 7 days. Set either retention value to 0 to disable automatic cleanup for that storage. Existing config files with an explicit retention value keep it; change it to `7` to use seven-day Drive retention. Previously uploaded Drive sidecars are left in place until their backup is cleaned up or expires.
+By default, alldbackup creates a ZIP under /var/backups/alldbackup/<job-name>/, uploads it to Drive, and checks the remote ZIP against the local archive. A failed upload keeps the ZIP for a later retry. `alldbackup verify` checks ZIP contents, entry CRCs, and metadata. Local and Google Drive retention both default to 7 days. Set either retention value to 0 to disable automatic cleanup for that storage. Existing config files with an explicit retention value keep it; change it to `7` to use seven-day Drive retention. Sidecars left by older versions are removed with their backup during cleanup or retention.
 
 Rclone crypt remotes are supported. Configure both the Google Drive remote and a crypt remote in the same file, then set storage.google_drive.remote to the crypt remote path. Rclone handles encryption and credentials.
 

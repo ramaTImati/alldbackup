@@ -2,15 +2,15 @@
 
 By default, a job named `production` stores its ZIP files under `/var/backups/alldbackup/production/`. If `storage.local.path` was changed, look under `<configured-path>/<job-name>/`.
 
-Google Drive stores only the ZIP; the SHA-256 sidecar is kept with the local archive and is not uploaded. If restoring from Drive, download the ZIP. This example assumes the `production` job uses its default `google_drive_path: production`; use that job's configured path if it differs. Replace the timestamp below with the filename shown in the remote:
+Google Drive stores only the ZIP. If restoring from Drive, download it and verify it with `alldbackup verify`. This example assumes the `production` job uses its default `google_drive_path: production`; use that job's configured path if it differs. Replace the timestamp below with the filename shown in the remote:
 
 ```bash
 rclone --config /etc/alldbackup/rclone.conf copyto 'gdrive:alldbackup/production/20261106T090000.123456789+0700.zip' /tmp/production.zip
 BACKUP=/tmp/production.zip
-unzip -t "$BACKUP"
+alldbackup verify --file "$BACKUP"
 ```
 
-`alldbackup verify` requires the original adjacent `.sha256` sidecar, so it can verify local backups while that sidecar is available. For a Drive-only copy, `unzip -t` checks the ZIP structure; without the original sidecar, it cannot compare the downloaded file with its backup-time SHA-256. If `storage.google_drive.config_file` uses a custom path, pass that path with Rclone's `--config` option.
+`verify` checks the ZIP structure, entry CRCs, and backup metadata. It does not prove who created an archive or compare against an external cryptographic checksum; only restore archives from a trusted source. If `storage.google_drive.config_file` uses a custom path, pass that path with Rclone's `--config` option.
 
 ## 1. Find and verify a backup
 
@@ -28,7 +28,7 @@ alldbackup verify --file "$BACKUP"
 unzip -p "$BACKUP" metadata.json
 ```
 
-`verify` checks the adjacent file named `<archive>.sha256`, the ZIP contents, and the timestamp in `metadata.json`. It does not prove who created an archive; only restore archives from a trusted source. `metadata.json` is stored inside the ZIP. The database dump is either `backup.sql` or `database.sqlite`.
+`verify` checks ZIP entries, their CRCs, and the timestamp in `metadata.json`. It does not prove who created an archive; only restore archives from a trusted source. `metadata.json` is stored inside the ZIP. The database dump is either `backup.sql` or `database.sqlite`.
 
 Use `unzip -p` below to stream the dump directly into a restore tool. If you need to extract it first, save it to a protected temporary directory and remove the temporary copy after the restore.
 
@@ -86,7 +86,7 @@ The integrity check should return `ok`. Move the file to the application's expec
 
 ## After restore
 
-Check schema, row counts, and application behavior before redirecting production traffic. A successful checksum and ZIP verification proves archive integrity, not that the restored application is correct. Schedule periodic restore tests on a disposable database.
+Check schema, row counts, and application behavior before redirecting production traffic. A successful ZIP verification checks the archive's structure and entry CRCs, not that the restored application is correct. Schedule periodic restore tests on a disposable database.
 
 ## Clean backups manually
 

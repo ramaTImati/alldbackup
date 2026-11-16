@@ -57,7 +57,7 @@ alldbackup doctor
 alldbackup run --job production-db
 ```
 
-`run` starts immediately. The automatic root cron dispatcher runs the job at its configured schedule. Host output is written to `/var/backups/alldbackup/production-db/` by default. A ZIP contains the database dump and `metadata.json`; the adjacent `.zip.sha256` sidecar checks it.
+`run` starts immediately. The automatic root cron dispatcher runs the job at its configured schedule. Host output is written to `/var/backups/alldbackup/production-db/` by default. A ZIP contains the database dump and `metadata.json`; `alldbackup verify` checks the ZIP entries and metadata.
 
 ## Temporary credentials and access
 

@@ -8,7 +8,7 @@
 
 <p align="center"><strong>Languages:</strong> English · <a href="README.id.md">Bahasa Indonesia</a></p>
 
-alldbackup is a Linux command-line tool for scheduled backups of MySQL, MariaDB, PostgreSQL, and SQLite databases from a host or Docker container. Each local backup has a ZIP containing the database dump and metadata, plus a separate SHA-256 checksum file. Backups can be stored locally and optionally uploaded to Google Drive.
+alldbackup is a Linux command-line tool for scheduled backups of MySQL, MariaDB, PostgreSQL, and SQLite databases from a host or Docker container. Each backup is a ZIP containing the database dump and metadata. Backups can be stored locally and optionally uploaded to Google Drive.
 
 ## System requirements
 
@@ -92,7 +92,7 @@ alldbackup drive test
 
 Rclone credentials are stored separately at /etc/alldbackup/rclone.conf; the setup does not replace a user's existing Rclone config. See [Google Drive setup](docs/google-drive.md) for remote and OAuth instructions.
 
-Only the backup ZIP is uploaded to Google Drive. The SHA-256 checksum sidecar remains beside the local ZIP.
+Only the backup ZIP is uploaded to Google Drive. `alldbackup verify` checks the ZIP contents, entry CRCs, and metadata without needing a separate checksum file.
 
 ## Run jobs, clean backups, and verify archives
 
@@ -110,7 +110,7 @@ alldbackup clean --job production 20261109T020000.123456789Z.zip
 alldbackup clean --job production --all
 ~~~
 
-Cleanup removes alldbackup backup archives and their local checksum sidecars; it also removes corresponding legacy Drive sidecars if present. Verify a local archive and its checksum with:
+Cleanup removes alldbackup backup archives and their legacy sidecars, if present. Verify a backup ZIP with:
 
 ~~~bash
 alldbackup verify --file /var/backups/alldbackup/production/20261109T020000.123456789Z.zip

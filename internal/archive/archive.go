@@ -2,8 +2,6 @@ package archive
 
 import (
 	"archive/zip"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"time"
 )
 
@@ -50,7 +47,7 @@ func BackupTime(name string) (time.Time, bool) {
 	return t, true
 }
 
-// Create writes a complete archive and checksum beside each other, then publishes both atomically.
+// Create writes a complete ZIP archive to the backup directory.
 func Create(dir string, metadata Metadata, dumpName string, dump func(io.Writer) error) (string, error) {
 	if dumpName != "backup.sql" && dumpName != "database.sqlite" {
 		return "", fmt.Errorf("invalid dump entry name %q", dumpName)
@@ -67,14 +64,7 @@ func Create(dir string, metadata Metadata, dumpName string, dump func(io.Writer)
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return "", err
 	}
-	if _, err := os.Lstat(finalPath + ".sha256"); err == nil {
-		return "", fmt.Errorf("backup checksum already exists: %s.sha256", finalPath)
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", err
-	}
 	partialPath := finalPath + ".partial"
-	partialSidecar := finalPath + ".sha256.partial"
-	finalSidecar := finalPath + ".sha256"
 	f, err := os.OpenFile(partialPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
 		return "", fmt.Errorf("create partial archive: %w", err)
@@ -84,9 +74,7 @@ func Create(dir string, metadata Metadata, dumpName string, dump func(io.Writer)
 		f.Close()
 		if !completed {
 			os.Remove(partialPath)
-			os.Remove(partialSidecar)
 			os.Remove(finalPath)
-			os.Remove(finalSidecar)
 		}
 	}()
 	zw := zip.NewWriter(f)
@@ -123,42 +111,18 @@ func Create(dir string, metadata Metadata, dumpName string, dump func(io.Writer)
 	if err := f.Close(); err != nil {
 		return "", fmt.Errorf("close ZIP: %w", err)
 	}
-	checksum, err := fileChecksum(partialPath)
-	if err != nil {
-		return "", err
-	}
-	if err := os.WriteFile(partialSidecar, []byte(checksum+"  "+name+"\n"), 0600); err != nil {
-		return "", fmt.Errorf("write checksum: %w", err)
-	}
-	for _, path := range []string{partialPath, partialSidecar} {
-		if err := os.Chmod(path, 0664); err != nil {
-			return "", fmt.Errorf("make backup readable by all users: %w", err)
-		}
+	if err := os.Chmod(partialPath, 0664); err != nil {
+		return "", fmt.Errorf("make backup readable by all users: %w", err)
 	}
 	if err := os.Rename(partialPath, finalPath); err != nil {
 		return "", fmt.Errorf("publish ZIP: %w", err)
-	}
-	if err := os.Rename(partialSidecar, finalSidecar); err != nil {
-		return "", fmt.Errorf("publish checksum: %w", err)
 	}
 	completed = true
 	return finalPath, nil
 }
 
 func Verify(path string) (Metadata, error) {
-	checksum, err := fileChecksum(path)
-	if err != nil {
-		return Metadata{}, err
-	}
 	base := filepath.Base(path)
-	data, err := os.ReadFile(path + ".sha256")
-	if err != nil {
-		return Metadata{}, fmt.Errorf("read checksum sidecar: %w", err)
-	}
-	fields := strings.Fields(string(data))
-	if len(fields) != 2 || fields[0] != checksum || fields[1] != base {
-		return Metadata{}, errors.New("backup checksum does not match sidecar")
-	}
 	r, err := zip.OpenReader(path)
 	if err != nil {
 		return Metadata{}, fmt.Errorf("open ZIP: %w", err)
@@ -210,17 +174,4 @@ func Verify(path string) (Metadata, error) {
 		return Metadata{}, errors.New("backup filename timestamp does not match metadata")
 	}
 	return meta, nil
-}
-
-func fileChecksum(path string) (string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
 }

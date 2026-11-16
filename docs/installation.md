@@ -31,7 +31,7 @@ The installer creates an empty default YAML config and credentials files; it doe
 | Job backup folder | `/var/backups/alldbackup/<job-name>/` | `alldbackup` group can create and remove backup files; all users can read them |
 | Cron dispatcher | root's crontab | one managed entry; checks YAML schedules every 15 minutes |
 
-ZIP and checksum files are publicly readable to local accounts by design. The group can write and remove backups, including when root cron and a regular user both run backup commands. Docker jobs require access to the Docker daemon; membership in the Docker group is effectively host-root access.
+Backup ZIP files are publicly readable to local accounts by design. The group can write and remove backups, including when root cron and a regular user both run backup commands. Docker jobs require access to the Docker daemon; membership in the Docker group is effectively host-root access.
 
 If this account needs Docker access, add it to the Docker group according to your host's Docker setup, then log out and back in. The alldbackup installer does not alter Docker permissions.
 
@@ -107,11 +107,10 @@ For the default local path, a job named `production` writes its files to:
 
 ```text
 /var/backups/alldbackup/production/
-├── 20261109T020000.123456789Z.zip
-└── 20261109T020000.123456789Z.zip.sha256
+└── 20261109T020000.123456789Z.zip
 ```
 
-Each ZIP contains `backup.sql` or `database.sqlite` and `metadata.json`. Local and Google Drive retention default to 7 days; set either value to `0` to disable its automatic cleanup. Google Drive stores ZIP files only; SHA-256 sidecars remain local. Verify a local ZIP with `alldbackup verify --file /path/to/file.zip` while its sidecar is available.
+Each ZIP contains `backup.sql` or `database.sqlite` and `metadata.json`. Local and Google Drive retention default to 7 days; set either value to `0` to disable its automatic cleanup. Google Drive stores ZIP files only. Verify a ZIP with `alldbackup verify --file /path/to/file.zip`.
 
 ## 7. Automatic schedule
 

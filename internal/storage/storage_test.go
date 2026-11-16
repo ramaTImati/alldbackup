@@ -45,9 +45,6 @@ func TestUploadFailureKeepsLocalFilesForRetry(t *testing.T) {
 	if err := os.WriteFile(path, []byte("zip"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path+".sha256", []byte("sum  backup.zip\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
 	exec := &fakeExec{runFailures: 2}
 	drive := &Rclone{Exec: exec, Config: config.DriveConfig{Remote: "gdrive:root", Timeout: "1m", Retries: 2}}
 	if err := drive.Upload(context.Background(), config.Job{Name: "db"}, path); err == nil {
@@ -56,10 +53,8 @@ func TestUploadFailureKeepsLocalFilesForRetry(t *testing.T) {
 	if len(exec.calls) != 3 {
 		t.Fatalf("got %d calls, want folder creation plus two upload attempts", len(exec.calls))
 	}
-	for _, file := range []string{path, path + ".sha256"} {
-		if _, err := os.Stat(file); err != nil {
-			t.Fatalf("local retry file removed: %v", err)
-		}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("local retry archive removed: %v", err)
 	}
 	if _, err := os.Stat(path + ".uploaded"); !os.IsNotExist(err) {
 		t.Fatalf("failed upload was marked successful: %v", err)
@@ -78,9 +73,6 @@ func TestUploadCopiesAndVerifiesArchiveOnly(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "backup.zip")
 	if err := os.WriteFile(path, []byte("zip"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path+".sha256", []byte("sum  backup.zip\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	exec := &fakeExec{}

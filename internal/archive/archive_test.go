@@ -22,6 +22,9 @@ func TestCreateVerifyAndFilename(t *testing.T) {
 	if got, want := filepath.Base(path), "20261106T020000.000000123Z.zip"; got != want {
 		t.Fatalf("filename = %q, want %q", got, want)
 	}
+	if _, err := os.Stat(path + ".sha256"); !os.IsNotExist(err) {
+		t.Fatalf("unexpected checksum sidecar: %v", err)
+	}
 	got, err := Verify(path)
 	if err != nil {
 		t.Fatal(err)
@@ -86,15 +89,15 @@ func TestCreateCleansPartialArchiveOnDumpFailure(t *testing.T) {
 	}
 }
 
-func TestVerifyRejectsBadChecksum(t *testing.T) {
+func TestVerifyRejectsCorruptZIP(t *testing.T) {
 	path, err := Create(t.TempDir(), Metadata{JobName: "db", Driver: "sqlite", TimestampUTC: time.Now(), FormatVersion: 1}, "database.sqlite", func(w io.Writer) error { _, err := w.Write([]byte("sqlite")); return err })
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path+".sha256", []byte("0000  "+filepath.Base(path)+"\n"), 0600); err != nil {
+	if err := os.WriteFile(path, []byte("not a ZIP"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Verify(path); err == nil {
-		t.Fatal("accepted invalid checksum")
+		t.Fatal("accepted a corrupt ZIP")
 	}
 }

@@ -8,7 +8,7 @@
 
 <p align="center"><strong>Bahasa:</strong> <a href="README.md">English</a> · Bahasa Indonesia</p>
 
-alldbackup adalah CLI Linux untuk backup terjadwal basis data MySQL, MariaDB, PostgreSQL, dan SQLite dari host atau container Docker. Setiap backup lokal memiliki file ZIP berisi dump basis data dan metadata, serta file checksum SHA-256 terpisah. Backup dapat disimpan lokal dan, jika diaktifkan, diunggah ke Google Drive.
+alldbackup adalah CLI Linux untuk backup terjadwal basis data MySQL, MariaDB, PostgreSQL, dan SQLite dari host atau container Docker. Setiap backup berupa file ZIP yang berisi dump basis data dan metadata. Backup dapat disimpan lokal dan, jika diaktifkan, diunggah ke Google Drive.
 
 ## Persyaratan sistem
 
@@ -92,7 +92,7 @@ alldbackup drive test
 
 Kredensial Rclone disimpan terpisah di /etc/alldbackup/rclone.conf; setup ini tidak mengganti konfigurasi Rclone milik user. Lihat [panduan Google Drive](docs/google-drive.md) untuk instruksi remote dan OAuth.
 
-Hanya file ZIP backup yang diunggah ke Google Drive. Sidecar checksum SHA-256 tetap berada di samping ZIP lokal.
+Hanya file ZIP backup yang diunggah ke Google Drive. `alldbackup verify` memeriksa isi ZIP, CRC setiap entri, dan metadata tanpa memerlukan file checksum terpisah.
 
 ## Jalankan job, bersihkan backup, dan verifikasi arsip
 
@@ -110,7 +110,7 @@ alldbackup clean --job production 20261109T020000.123456789Z.zip
 alldbackup clean --job production --all
 ~~~
 
-Pembersihan menghapus arsip alldbackup beserta sidecar checksum lokal; sidecar Drive lama yang terkait juga dihapus jika ada. Verifikasi arsip lokal beserta checksum:
+Pembersihan menghapus arsip alldbackup beserta sidecar lama jika masih ada. Verifikasi file ZIP backup:
 
 ~~~bash
 alldbackup verify --file /var/backups/alldbackup/production/20261109T020000.123456789Z.zip

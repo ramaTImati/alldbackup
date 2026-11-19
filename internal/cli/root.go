@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"os/user"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -70,7 +71,7 @@ func Execute() error {
 	root.PersistentFlags().StringVar(&o.configPath, "config", config.DefaultPath, "configuration file")
 	root.PersistentFlags().BoolVar(&o.verbose, "verbose", false, "enable debug logging")
 	root.PersistentFlags().BoolVar(&o.quiet, "quiet", false, "show errors only")
-	root.AddCommand(initCommand(o), configCommand(o), runCommand(o), cleanCommand(o), cronCommand(o), doctorCommand(o), driveCommand(o), verifyCommand(), updateCommand(), uninstallCommand(o), versionCommand())
+	root.AddCommand(initCommand(o), configCommand(o), runCommand(o), cleanCommand(o), cronCommand(o), doctorCommand(o), driveCommand(o), verifyCommand(), updateCommand(o), uninstallCommand(o), versionCommand())
 	return root.Execute()
 }
 
@@ -771,8 +772,15 @@ func versionCommand() *cobra.Command {
 	}}
 }
 
-func updateCommand() *cobra.Command {
+func updateCommand(o *options) *cobra.Command {
 	return &cobra.Command{Use: "update", Short: "Update the binary to the latest release", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
+		account, err := repairRcloneConfigAccess(o.configPath)
+		if err != nil {
+			return err
+		}
+		if account != "" {
+			fmt.Fprintf(cmd.OutOrStdout(), "Rclone config permissions ensured for %s (0600)\n", account)
+		}
 		tag, updated, err := updater.Update(cmd.Context(), Version)
 		if err != nil {
 			return err
@@ -784,6 +792,57 @@ func updateCommand() *cobra.Command {
 		}
 		return nil
 	}}
+}
+
+func repairRcloneConfigAccess(configPath string) (string, error) {
+	if os.Geteuid() != 0 {
+		return "", nil
+	}
+	accountName := strings.TrimSpace(os.Getenv("SUDO_USER"))
+	if accountName == "" || accountName == "root" {
+		return "", nil
+	}
+
+	c := config.DefaultsFor(configPath)
+	if loaded, err := config.Load(configPath); err == nil {
+		c = loaded
+	} else if filepath.Clean(configPath) != filepath.Clean(config.DefaultPath) && !errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	path := c.Storage.GoogleDrive.ConfigFile
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("inspect Rclone config file: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("Rclone config path %q must be a regular file", path)
+	}
+	account, err := user.Lookup(accountName)
+	if err != nil {
+		return "", fmt.Errorf("look up sudo account %q: %w", accountName, err)
+	}
+	uid, err := strconv.Atoi(account.Uid)
+	if err != nil {
+		return "", fmt.Errorf("invalid UID for sudo account %q: %w", accountName, err)
+	}
+	group, err := user.LookupGroup("alldbackup")
+	if err != nil {
+		return "", fmt.Errorf("look up alldbackup group: %w", err)
+	}
+	gid, err := strconv.Atoi(group.Gid)
+	if err != nil {
+		return "", fmt.Errorf("invalid GID for alldbackup group: %w", err)
+	}
+	if err := os.Chmod(path, 0600); err != nil {
+		return "", fmt.Errorf("secure Rclone config permissions: %w", err)
+	}
+	if err := os.Chown(path, uid, gid); err != nil {
+		return "", fmt.Errorf("set Rclone config owner to %q: %w", accountName, err)
+	}
+	return accountName, nil
 }
 
 func uninstallCommand(o *options) *cobra.Command {

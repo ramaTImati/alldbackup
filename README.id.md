@@ -36,7 +36,7 @@ Update binary tanpa curl:
 sudo alldbackup update
 ~~~
 
-Command ini mengunduh rilis Linux terbaru, memverifikasi checksum, lalu hanya mengganti binary. Jalankan installer kembali jika perlu migrasi permission direktori atau cron.
+Command ini mengunduh rilis Linux terbaru, memverifikasi checksum, mengganti binary, lalu memastikan file konfigurasi Rclone dimiliki akun yang menjalankan `sudo` dengan mode `0600`. Jalankan installer kembali jika perlu migrasi permission direktori atau cron.
 
 Command update tersedia mulai dari rilis yang menyertakan fitur ini. Jika binary lama menampilkan pesan command tidak dikenal, jalankan installer satu kali untuk memperbaruinya.
 

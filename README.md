@@ -36,7 +36,7 @@ Update the installed binary without curl:
 sudo alldbackup update
 ~~~
 
-This downloads the latest Linux release, verifies its checksum, and replaces only the binary. Run the installer again when you need its directory-permission or cron migrations.
+This downloads the latest Linux release, verifies its checksum, replaces the binary, and ensures the configured Rclone file belongs to the account that invoked `sudo` with mode `0600`. Run the installer again when you need its directory-permission or cron migrations.
 
 The update command is available in releases that include this feature. If an older installed binary reports an unknown command, run the installer once to upgrade it.
 

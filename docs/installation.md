@@ -129,7 +129,7 @@ For details, see [cron scheduling](cron.md). `cron install` and `cron remove` op
 
 ## Upgrade
 
-For a routine Linux binary update, use the built-in command. It downloads the latest release, verifies its checksum, and replaces only the binary:
+For a routine Linux update, use the built-in command. It downloads the latest release, verifies its checksum, replaces the binary, and restores the configured Rclone file's owner to the account that invoked `sudo` with mode `0600`:
 
 ```bash
 sudo alldbackup update
